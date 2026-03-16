@@ -15,6 +15,7 @@ import { MessagesTab } from "./components/MessagesTab";
 import { ProfileTab } from "./components/ProfileTab";
 import { TrainerScheduleTab } from "./components/TrainerScheduleTab";
 import { TabBar } from "./components/TabBar";
+import { GramTab } from "./components/GramTab";
 
 // Lazy imports — AdminPanel (~400KB) i komponenty trenera ładują się tylko gdy potrzebne
 const AdminPanel   = lazy(() => import("./components/admin/AdminPanel").then(m => ({ default: m.AdminPanel })));
@@ -255,7 +256,14 @@ function AppRoot() {
     setActiveGroups(["tech","ur","maszyny"]); setNotifReminder(true); setNotifCert(true);
   }, [user]);
 
-  // OPTYMALIZACJA: calcProgress obliczany RAZ tutaj i przekazywany przez props / context.
+  const refreshGameData = useCallback(async () => {
+    if (!user?.accessToken || !user?.id) return;
+    try {
+      const rows = await db.get(user.accessToken, "user_gamification", `user_id=eq.${user.id}&select=points,streak_current`);
+      const gd = rows[0] || { points: 0, streak_current: 0 };
+      setGameData({ points: gd.points || 0, streak_current: gd.streak_current || 0 });
+    } catch {}
+  }, [user]);
   // Wcześniej wywoływany niezależnie w App, TrainingTab i ProfileTab = 3x ta sama praca.
   const progress = useMemo(
     () => calcProgress(completed, activeGroups),
@@ -331,6 +339,7 @@ function AppRoot() {
           trainingOverrides={trainingOverrides}
           onComplete={handleComplete}
           gameData={gameData}
+          onTipConfirmed={refreshGameData}
         />
       )}
     </UserContext.Provider>
@@ -386,8 +395,9 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
 }
 
 /* ─── WIDOK KLIENTA ──────────────────────────────────────────────────────── */
-function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData }) {
+function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed }) {
   const { user } = useUser();
+  const [showGram, setShowGram] = useState(false);
   return (
     <div className="app-container" style={styles.appContainer}>
       <Header onLogout={onLogout}/>
@@ -396,15 +406,44 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
           {user.displayName}{bannerSub ? ` · ${bannerSub}` : ""}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          {(gameData?.streak_current > 0 || gameData?.points > 0) && (
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.greyDk, display: "flex", alignItems: "center", gap: 6 }}>
-              {gameData.streak_current > 0 && <span>🔥 {gameData.streak_current}</span>}
-              {gameData.streak_current > 0 && gameData.points > 0 && <span style={{ color: C.grey }}>·</span>}
-              {gameData.points > 0 && <span style={{ color: C.green }}>{gameData.points} pkt</span>}
-            </span>
-          )}
+          <button
+            onClick={() => setShowGram(true)}
+            style={{ background: "none", border: "none", padding: "2px 6px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, borderRadius: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.greyDk }}>🔥 {gameData?.streak_current || 0}</span>
+            <span style={{ color: C.grey, fontSize: 12 }}>·</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{gameData?.points || 0} pkt</span>
+          </button>
         </div>
       </div>
+      <div style={styles.appContent}>
+        <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
+          <TrainingTab completed={completed} onComplete={onComplete} activeGroups={activeGroups} loading={dataLoading} trainingOverrides={trainingOverrides}/>
+        </div>
+        <div style={tab === 1 ? styles.tabVisible : styles.tabHidden}>
+          <CatalogTab completed={completed} activeGroups={activeGroups}/>
+        </div>
+        <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
+          <ScheduleTab activeGroups={activeGroups} trainerNum={user.trainer_id}/>
+        </div>
+        <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
+          <MessagesTab onTipConfirmed={onTipConfirmed}/>
+        </div>
+        <div style={tab === 4 ? styles.tabVisible : styles.tabHidden}>
+          <ProfileTab
+            completed={completed}
+            activeGroups={activeGroups}
+            setActiveGroups={setActiveGroups}
+            onLogout={onLogout}
+            trainerView={trainerView}
+            setTrainerView={setTrainerView}
+          />
+        </div>
+      </div>
+      <TabBar tab={tab} setTab={setTab} completedCount={completed.length} msgCount={msgCount}/>
+      {showGram && <GramTab onClose={() => setShowGram(false)}/>}
+    </div>
+  );
+}
       <div style={styles.appContent}>
         {/* display:none zamiast {tab===X && <Comp/>} — stan zakładek (scroll, inputy) zachowany */}
         <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
