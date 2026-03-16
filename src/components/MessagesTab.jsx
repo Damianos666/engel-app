@@ -14,7 +14,7 @@ const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "";
 const toISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
 /* ─── TipBanner — Tip dnia na górze zakładki Wiadomości ─────────────────── */
-function TipBanner({ token, userId }) {
+function TipBanner({ token, userId, onConfirmed }) {
   const [tipQ,       setTipQ]       = useState(null);   // pytanie (quiz_question row)
   const [confirmed,  setConfirmed]  = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -62,6 +62,7 @@ function TipBanner({ token, userId }) {
         program_start_date: gd.program_start_date || today,
       }, "user_id");
       setConfirmed(true);
+      if (onConfirmed) onConfirmed();
     } catch (e) {
       alert("Błąd zapisu: " + e.message);
     } finally {
@@ -251,7 +252,7 @@ function WeeklyQuizBanner({ token, userId }) {
   );
 }
 
-export function MessagesTab() {
+export function MessagesTab({ onTipConfirmed }) {
   const T = useT();
   const { user, token } = useUser();
   const isAdmin = user?.role === "admin" || user?.email === ADMIN_EMAIL;
@@ -320,7 +321,7 @@ export function MessagesTab() {
       {err && <div style={{background:"#FDEDEC",border:`1px solid ${C.red}`,margin:12,padding:"12px 16px",fontSize:13,color:C.red}}>{err}</div>}
 
       {/* TIP DNIA — tylko dla nie-adminów */}
-      {!isAdmin && <TipBanner token={token} userId={user?.id}/>}
+      {!isAdmin && <TipBanner token={token} userId={user?.id} onConfirmed={onTipConfirmed}/>}
 
       {/* QUIZ TYGODNIOWY — 7. dzień programu, tylko dla nie-adminów */}
       {!isAdmin && <WeeklyQuizBanner token={token} userId={user?.id}/>}
