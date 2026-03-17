@@ -444,36 +444,6 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
     </div>
   );
 }
-      <div style={styles.appContent}>
-        {/* display:none zamiast {tab===X && <Comp/>} — stan zakładek (scroll, inputy) zachowany */}
-        <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
-          <TrainingTab completed={completed} onComplete={onComplete} activeGroups={activeGroups} loading={dataLoading} trainingOverrides={trainingOverrides}/>
-        </div>
-        <div style={tab === 1 ? styles.tabVisible : styles.tabHidden}>
-          <CatalogTab completed={completed} activeGroups={activeGroups}/>
-        </div>
-        <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
-          <ScheduleTab activeGroups={activeGroups} trainerNum={user.trainer_id}/>
-        </div>
-        <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
-          <MessagesTab/>
-        </div>
-        <div style={tab === 4 ? styles.tabVisible : styles.tabHidden}>
-          <ProfileTab
-            completed={completed}
-            activeGroups={activeGroups}
-            setActiveGroups={setActiveGroups}
-            onLogout={onLogout}
-            trainerView={trainerView}
-            setTrainerView={setTrainerView}
-          />
-        </div>
-      </div>
-      <TabBar tab={tab} setTab={setTab} completedCount={completed.length} msgCount={msgCount}/>
-    </div>
-  );
-}
-
 /* ─── TABBAR TRENERA ─────────────────────────────────────────────────────── */
 // Wydzielony żeby uniknąć re-renderu całego TrainerView przy zmianie zakładki.
 const tabBtnBase = { flex: 1, background: "none", border: "none", padding: "8px 2px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", position: "relative" };
