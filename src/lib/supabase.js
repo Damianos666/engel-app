@@ -112,9 +112,13 @@ const isJwtExpired = (text) => {
 };
 
 // Wrapper który przy JWT expired automatycznie odświeża token i ponawia request.
-const _withRefresh = async (fn) => {
-  const result = await fn(session.getToken());
-  if (!result._expired) return result;
+// initialToken — token przekazany do db.get/insert/etc. Używamy go jako primary,
+// session.getToken() tylko jako fallback (np. gdy komponent nie ma aktualnego tokenu).
+const _withRefresh = async (initialToken, fn) => {
+  const result = await fn(initialToken || session.getToken());
+  // Tylko obiekt { _expired: true } oznacza wygaśnięcie tokenu.
+  // Tablice, null, liczby i normalne obiekty danych zwracamy od razu.
+  if (!result || typeof result !== "object" || Array.isArray(result) || !result._expired) return result;
 
   // Token wygasł — próbuj odświeżyć
   const saved = session.load();
@@ -148,7 +152,7 @@ const _withRefresh = async (fn) => {
 //   }, [token]);
 export const db = {
   get: (token, table, query = "", { signal } = {}) =>
-    _withRefresh(async (t) => {
+    _withRefresh(token, async (t) => {
       const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
         headers: authHeaders(t), signal,
       });
@@ -161,7 +165,7 @@ export const db = {
     }),
 
   insert: (token, table, data, { signal } = {}) =>
-    _withRefresh(async (t) => {
+    _withRefresh(token, async (t) => {
       const h = { ...authHeaders(t), "Prefer": "return=representation" };
       const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
         method: "POST", headers: h, body: JSON.stringify(data), signal,
@@ -175,7 +179,7 @@ export const db = {
     }),
 
   update: (token, table, match, data, { signal } = {}) =>
-    _withRefresh(async (t) => {
+    _withRefresh(token, async (t) => {
       const h = { ...authHeaders(t), "Prefer": "return=representation" };
       const r = await fetch(`${SB_URL}/rest/v1/${table}?${match}`, {
         method: "PATCH", headers: h, body: JSON.stringify(data), signal,
@@ -189,7 +193,7 @@ export const db = {
     }),
 
   remove: (token, table, match, { signal } = {}) =>
-    _withRefresh(async (t) => {
+    _withRefresh(token, async (t) => {
       const h = { ...authHeaders(t), "Prefer": "return=representation" };
       const r = await fetch(`${SB_URL}/rest/v1/${table}?${match}`, {
         method: "DELETE", headers: h, signal,
@@ -203,7 +207,7 @@ export const db = {
     }),
 
   upsert: (token, table, data, onConflict, { signal } = {}) =>
-    _withRefresh(async (t) => {
+    _withRefresh(token, async (t) => {
       const h = {
         ...authHeaders(t),
         "Prefer": "resolution=merge-duplicates,return=representation",
