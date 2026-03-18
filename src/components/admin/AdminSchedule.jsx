@@ -87,9 +87,11 @@ export function AdminSchedule({ token }) {
   const tapCounts          = useRef({});
   const tapTimers          = useRef({});
   const timelineRef        = useRef(null);
-  const pendingScrollAdjust = useRef(0);   // korekta po dodaniu miesiąca z lewej
+  const pendingScrollAdjust = useRef(0);
   const initialScrollDone  = useRef(false);
   const isExtending        = useRef(false);
+  const scrollRestoreDate  = useRef(null); // data środka widoku — przywracana po zmianie cellW
+  const isOrientChanging   = useRef(false); // blokuje nadpisanie scrollRestoreDate przez scroll event podczas obrotu
 
   // Liczba dni widocznych w oknie bez scrollowania — zmień 12 na inną wartość aby dostosować szerokość komórek
   const [cellW, setCellW] = useState(28); // wartość zastępcza — ResizeObserver natychmiast ją poprawi
@@ -112,20 +114,76 @@ export function AdminSchedule({ token }) {
     if (!timelineRef.current) return;
     function recalc() {
       if (!timelineRef.current) return;
-      const available = timelineRef.current.clientWidth - 46;
-      if (available > 0) setCellW(available / 12);
+      const cw = timelineRef.current.clientWidth;
+      if (cw < 20) return;
+      setCellW((cw - 46) / 12);
     }
     const ro = new ResizeObserver(recalc);
     ro.observe(timelineRef.current);
+
+    const vvp = window.visualViewport;
+    if (vvp) vvp.addEventListener("resize", recalc);
+    else window.addEventListener("resize", recalc);
+
+    function forceRestoreScroll() {
+      if (!timelineRef.current || !scrollRestoreDate.current) return;
+      const cw = timelineRef.current.clientWidth;
+      if (cw < 20) return;
+      const newCellW = (cw - 46) / 12;
+      if (newCellW === 0 || tlOrigin === 0) return;
+      const targetDay = Math.round((new Date(scrollRestoreDate.current + "T12:00:00") - new Date("2020-01-01T12:00:00")) / 86400000);
+      const left = 46 + (targetDay - tlOrigin) * newCellW;
+      timelineRef.current.scrollLeft = Math.max(0, left - cw / 2);
+    }
+    let timers = [];
     function onOrient() {
-      // iOS potrzebuje dwóch prób — layout nie jest gotowy przy pierwszym callbacku
-      setTimeout(recalc, 150);
-      setTimeout(recalc, 450);
+      // Zablokuj nadpisywanie scrollRestoreDate przez scroll eventy podczas obrotu
+      isOrientChanging.current = true;
+      timers.forEach(clearTimeout);
+      timers = [50, 200, 500, 800, 1200].map((ms, i, arr) => setTimeout(() => {
+        recalc();
+        forceRestoreScroll();
+        // Odblokuj po ostatnim timerze
+        if (ms === arr[arr.length - 1]) isOrientChanging.current = false;
+      }, ms));
     }
     window.addEventListener("orientationchange", onOrient);
+    if (window.screen?.orientation)
+      window.screen.orientation.addEventListener("change", onOrient);
+
     recalc();
-    return () => { ro.disconnect(); window.removeEventListener("orientationchange", onOrient); };
+    return () => {
+      ro.disconnect();
+      if (vvp) vvp.removeEventListener("resize", recalc);
+      else window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", onOrient);
+      window.screen?.orientation?.removeEventListener("change", onOrient);
+      timers.forEach(clearTimeout);
+    };
   }, []);
+
+
+
+  // Po zmianie cellW przywróć pozycję scrollu do zapamiętanej daty
+  // UWAGA: NIE zerujemy scrollRestoreDate — przeglądarka może zresetować scrollLeft
+  // asynchronicznie PO naszym restore (przy zwężaniu kontenera), więc kolejne recalc
+  // musi wiedzieć gdzie wrócić. Zerowanie następuje dopiero przy następnym scrollu usera.
+  useEffect(() => {
+    if (!timelineRef.current || cellW === 0 || tlOrigin === 0) return;
+    if (!scrollRestoreDate.current) return;
+    if (!initialScrollDone.current) return;
+    const targetDay = Math.round((new Date(scrollRestoreDate.current + "T12:00:00") - new Date("2020-01-01T12:00:00")) / 86400000);
+    const left = 46 + (targetDay - tlOrigin) * cellW;
+    timelineRef.current.scrollLeft = Math.max(0, left - timelineRef.current.clientWidth / 2);
+  }, [cellW, tlOrigin]);
+
+  // Synchronizuj scrollRestoreDate z selDate — kiedy user wybierze datę w formularzu,
+  // przechowaj ją aby przywrócić po orientationchange
+  useEffect(() => {
+    if (selDate && formMode) {
+      scrollRestoreDate.current = selDate;
+    }
+  }, [selDate, formMode]);
 
   useEffect(() => { loadScheduled(); }, []);
 
@@ -156,6 +214,16 @@ export function AdminSchedule({ token }) {
     const el = timelineRef.current;
     if (!el || cellW === 0 || isExtending.current) return;
     const sl = el.scrollLeft, vw = el.clientWidth, maxSl = el.scrollWidth - vw;
+    // Aktualizuj datę środka — ale NIE podczas obrotu (browser resetuje scrollLeft=0
+    // i odpala scroll event, który by nadpisał dobrą datę złą)
+    if (!isOrientChanging.current) {
+      const centerDay = tlOrigin + Math.round((sl + vw / 2 - 46) / cellW);
+      const d = new Date("2020-01-01T12:00:00");
+      d.setDate(d.getDate() + centerDay);
+      scrollRestoreDate.current = d.getFullYear() + "-" +
+        String(d.getMonth()+1).padStart(2,"0") + "-" +
+        String(d.getDate()).padStart(2,"0");
+    }
     const centerX = sl + vw / 2;
     for (let i = monthOffsets.length - 1; i >= 0; i--) {
       if (centerX >= monthOffsets[i]) {
@@ -199,6 +267,7 @@ export function AdminSchedule({ token }) {
   function openNewForm(date, trainerId) {
     setFormMode("new"); setEditingId(null);
     setSelDate(date); setSelTrainer(trainerId);
+    scrollRestoreDate.current = date; // Przechowaj wybraną datę przed orientationchange
     resetFormFields(); setMsg(null);
     setTimeout(() => window.scrollTo?.({top:9999,behavior:"smooth"}), 60);
   }
@@ -208,6 +277,7 @@ export function AdminSchedule({ token }) {
     const training = isST ? null : TRAININGS.find(t=>t.id===entry.training_id);
     setFormMode("edit"); setEditingId(entry.id);
     setSelDate(entry.date || ""); setSelTrainer(Number(entry.trainer_id) || null);
+    scrollRestoreDate.current = entry.date || ""; // Przechowaj datę edytowanego wpisu
     setTrainingMode(isST ? "ST" : "normal");
     setSelGroup(training?.group || GROUPS[0].id);
     setSelTraining(isST ? (TRAININGS.find(t=>t.group===GROUPS[0].id)?.id || TRAININGS[0].id) : entry.training_id);
@@ -487,14 +557,29 @@ export function AdminSchedule({ token }) {
     }
     const badgeVal = bar.participantsCount != null ? bar.participantsCount : null;
     const isLifted = liftedBar?.id === bar.id;
+    // Touch eventy muszą być podpięte ręcznie z passive:false — React rejestruje je pasywnie
+    const barDivRef = useRef(null);
+    useEffect(() => {
+      const el = barDivRef.current;
+      if (!el) return;
+      const onTS = e => handleBarPressStart(bar, e);
+      const onTE = e => handleBarPressEnd(bar, e);
+      const onTM = () => handleBarPressCancel(bar.id);
+      el.addEventListener("touchstart", onTS, { passive: false });
+      el.addEventListener("touchend",   onTE, { passive: false });
+      el.addEventListener("touchmove",  onTM, { passive: true });
+      return () => {
+        el.removeEventListener("touchstart", onTS);
+        el.removeEventListener("touchend",   onTE);
+        el.removeEventListener("touchmove",  onTM);
+      };
+    });
     return (
       <div
+        ref={barDivRef}
         onMouseDown={e => handleBarPressStart(bar, e)}
         onMouseUp={e => handleBarPressEnd(bar, e)}
         onMouseLeave={() => handleBarPressCancel(bar.id)}
-        onTouchStart={e => handleBarPressStart(bar, e)}
-        onTouchEnd={e => handleBarPressEnd(bar, e)}
-        onTouchMove={() => handleBarPressCancel(bar.id)}
         onContextMenu={e => e.preventDefault()}
         title={`${bar.title}${bar.isPlanned?" [planowane]":""}${bar.isHidden?" [ukryte]":""}${bar.isOutgoing?" [wyjazdowe]":""}\nTap=przenieś · 2×tap=planned · przytrzymaj=edytuj`}
         style={{
