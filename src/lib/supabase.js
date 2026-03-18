@@ -98,127 +98,96 @@ export const auth = {
 };
 
 /* ─── AUTO-REFRESH ───────────────────────────────────────────────────────── */
-// Callback wywoływany przez App.jsx po odświeżeniu sesji.
-// Pozwala db._withRefresh() zaktualizować token w globalnym stanie React.
 let _onTokenRefreshed = null;
 export const setOnTokenRefreshed = (fn) => { _onTokenRefreshed = fn; };
 
-// Sprawdza czy błąd to wygaśnięcie JWT (kod PGRST303 lub komunikat "JWT expired").
 const isJwtExpired = (text) => {
   try {
     const json = JSON.parse(text);
     return json?.code === "PGRST303" || json?.message === "JWT expired";
-  } catch { return text?.includes("JWT expired"); }
+  } catch { return false; }
 };
 
-// Wrapper który przy JWT expired automatycznie odświeża token i ponawia request.
-const _withRefresh = async (fn) => {
-  const result = await fn(session.getToken());
-  if (!result._expired) return result;
+// Wykonuje fetch, a jeśli odpowiedź to JWT expired — odświeża token i ponawia.
+// Zwraca zawsze gotowy Response (do dalszego .json() lub .text()).
+const fetchWithRefresh = async (url, options, token) => {
+  const r = await fetch(url, { ...options, headers: { ...options.headers } });
+  if (r.status !== 401) return r;                        // nie 401 → zwróć od razu
+  const text = await r.text();
+  if (!isJwtExpired(text)) { throw new Error(text); }   // 401 ale nie JWT → rzuć błąd
 
-  // Token wygasł — próbuj odświeżyć
+  // JWT expired — odśwież token
   const saved = session.load();
   if (!saved?.refreshToken) throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+  let newToken;
   try {
     const refreshed = await auth.refreshSession(saved.refreshToken);
     session.save(refreshed.access_token, refreshed.refresh_token, refreshed.user);
-    if (_onTokenRefreshed) _onTokenRefreshed(refreshed.access_token);
-    // Ponów oryginalny request z nowym tokenem
-    return fn(refreshed.access_token);
+    newToken = refreshed.access_token;
+    if (_onTokenRefreshed) _onTokenRefreshed(newToken);
   } catch {
     session.clear();
     throw new Error("Sesja wygasła. Zaloguj się ponownie.");
   }
+  // Ponów request z nowym tokenem
+  return fetch(url, {
+    ...options,
+    headers: { ...options.headers, "Authorization": `Bearer ${newToken}` },
+  });
 };
 
 /* ─── DB ─────────────────────────────────────────────────────────────────── */
-// OPTYMALIZACJA: Wszystkie metody przyjmują opcjonalny { signal } z AbortController.
-// Dzięki temu komponenty mogą anulować in-flight requesty przy odmontowaniu,
-// eliminując memory leaks i błędy "Can't perform a React state update on unmounted component".
-//
-// AUTO-REFRESH: Każda metoda używa _withRefresh() — przy błędzie JWT expired
-// token jest automatycznie odnawiany i request ponowiony. Użytkownik nie widzi błędu.
-//
-// Użycie w komponencie:
-//   useEffect(() => {
-//     const ctrl = new AbortController();
-//     db.get(token, "messages", "...", { signal: ctrl.signal })
-//       .then(setMessages).catch(e => { if (e.name !== "AbortError") setErr(e.message); });
-//     return () => ctrl.abort();
-//   }, [token]);
 export const db = {
-  get: (token, table, query = "", { signal } = {}) =>
-    _withRefresh(async (t) => {
-      const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
-        headers: authHeaders(t), signal,
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        if (isJwtExpired(text)) return { _expired: true };
-        throw new Error(text);
-      }
-      return JSON.parse(text);
-    }),
+  get: async (token, table, query = "", { signal } = {}) => {
+    const r = await fetchWithRefresh(
+      `${SB_URL}/rest/v1/${table}?${query}`,
+      { headers: authHeaders(token), signal },
+      token
+    );
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
 
-  insert: (token, table, data, { signal } = {}) =>
-    _withRefresh(async (t) => {
-      const h = { ...authHeaders(t), "Prefer": "return=representation" };
-      const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
-        method: "POST", headers: h, body: JSON.stringify(data), signal,
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        if (isJwtExpired(text)) return { _expired: true };
-        throw new Error(text);
-      }
-      return JSON.parse(text);
-    }),
+  insert: async (token, table, data, { signal } = {}) => {
+    const h = { ...authHeaders(token), "Prefer": "return=representation" };
+    const r = await fetchWithRefresh(
+      `${SB_URL}/rest/v1/${table}`,
+      { method: "POST", headers: h, body: JSON.stringify(data), signal },
+      token
+    );
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
 
-  update: (token, table, match, data, { signal } = {}) =>
-    _withRefresh(async (t) => {
-      const h = { ...authHeaders(t), "Prefer": "return=representation" };
-      const r = await fetch(`${SB_URL}/rest/v1/${table}?${match}`, {
-        method: "PATCH", headers: h, body: JSON.stringify(data), signal,
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        if (isJwtExpired(text)) return { _expired: true };
-        throw new Error(text);
-      }
-      return JSON.parse(text);
-    }),
+  update: async (token, table, match, data, { signal } = {}) => {
+    const h = { ...authHeaders(token), "Prefer": "return=representation" };
+    const r = await fetchWithRefresh(
+      `${SB_URL}/rest/v1/${table}?${match}`,
+      { method: "PATCH", headers: h, body: JSON.stringify(data), signal },
+      token
+    );
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
 
-  remove: (token, table, match, { signal } = {}) =>
-    _withRefresh(async (t) => {
-      const h = { ...authHeaders(t), "Prefer": "return=representation" };
-      const r = await fetch(`${SB_URL}/rest/v1/${table}?${match}`, {
-        method: "DELETE", headers: h, signal,
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        if (isJwtExpired(text)) return { _expired: true };
-        throw new Error(text);
-      }
-      return JSON.parse(text);
-    }),
+  remove: async (token, table, match, { signal } = {}) => {
+    const h = { ...authHeaders(token), "Prefer": "return=representation" };
+    const r = await fetchWithRefresh(
+      `${SB_URL}/rest/v1/${table}?${match}`,
+      { method: "DELETE", headers: h, signal },
+      token
+    );
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
 
-  upsert: (token, table, data, onConflict, { signal } = {}) =>
-    _withRefresh(async (t) => {
-      const h = {
-        ...authHeaders(t),
-        "Prefer": "resolution=merge-duplicates,return=representation",
-      };
-      const url = onConflict
-        ? `${SB_URL}/rest/v1/${table}?on_conflict=${onConflict}`
-        : `${SB_URL}/rest/v1/${table}`;
-      const r = await fetch(url, {
-        method: "POST", headers: h, body: JSON.stringify(data), signal,
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        if (isJwtExpired(text)) return { _expired: true };
-        throw new Error(text);
-      }
-      return JSON.parse(text);
-    }),
+  upsert: async (token, table, data, onConflict, { signal } = {}) => {
+    const h = { ...authHeaders(token), "Prefer": "resolution=merge-duplicates,return=representation" };
+    const url = onConflict
+      ? `${SB_URL}/rest/v1/${table}?on_conflict=${onConflict}`
+      : `${SB_URL}/rest/v1/${table}`;
+    const r = await fetchWithRefresh(url, { method: "POST", headers: h, body: JSON.stringify(data), signal }, token);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  },
 };
