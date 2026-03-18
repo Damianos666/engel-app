@@ -401,23 +401,25 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
       </div>
       <div style={styles.trainerContent}>
         {/* display:none zamiast conditional render — zachowuje stan zakładek */}
-        <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
+        {/* NAPRAWA: tabVisible miało overflow:hidden + height:100% co blokowało scroll.
+            trainerContent już scrolluje — dzieci nie powinny ograniczać wysokości. */}
+        <div style={tab === 0 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
           <TrainerScheduleTab trainerNum={user.trainer_id}/>
         </div>
-        <div style={tab === 1 ? styles.tabVisible : styles.tabHidden}>
+        <div style={tab === 1 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
           <Suspense fallback={<Spinner/>}>
             <AdminCodeGen defaultTrainer={user.trainer_id}/>
           </Suspense>
         </div>
-        <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
+        <div style={tab === 2 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
           <MessagesTab/>
         </div>
-        <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
+        <div style={tab === 3 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
           <Suspense fallback={<Spinner/>}>
             <AdminQuiz/>
           </Suspense>
         </div>
-        <div style={tab === 4 ? styles.tabVisible : styles.tabHidden}>
+        <div style={tab === 4 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
           <ProfileTab
             completed={completed}
             activeGroups={activeGroups}
