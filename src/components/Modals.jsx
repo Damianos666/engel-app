@@ -58,7 +58,12 @@ export function CertModal({ entry, user, onClose }) {
   const { addToast } = useToast();
   const { token } = useUser();
   const [generating, setGenerating] = useState(false);
-  const certId = `${entry.training.id}-${entry.date.replace(/\./g,"")}-${user.login.slice(0,3).toUpperCase()}`;
+  // Nr certyfikatu: ID_SZKOLENIADDMMYYYYIINNSS
+  // II = 2 litery imienia, NN = 2 litery nazwiska, SS = 2 ostatnie znaki UUID
+  // Nr certyfikatu: ID_SZKOLENIADDMMYYYYXXX
+  // XXX = ostatnie 3 znaki UUID (hex) → 4096 kombinacji, wystarczy dla max 20 osób/szkolenie
+  const uidSuffix = (user.id || "").replace(/-/g, "").slice(-3).toUpperCase();
+  const certId = `${entry.training.id}${entry.date.replace(/\./g,"")}${uidSuffix}`;
   const sub = [user.displayRole, user.firma].filter(Boolean).join(" · ");
 
   async function downloadPDF() {
