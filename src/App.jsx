@@ -390,6 +390,13 @@ function AppRoot() {
 // bo zmiany stanu specyficzne dla trenera nie dotyczą widoku klienta.
 function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, bannerSub }) {
   const { user, token } = useUser();  // token z kontekstu — bez prop drilling
+
+  useEffect(() => {
+    const handler = () => setTab(2); // Wiadomości = tab 2 w widoku trenera
+    window.addEventListener("gram:goToMessages", handler);
+    return () => window.removeEventListener("gram:goToMessages", handler);
+  }, [setTab]);
+
   return (
     <div className="app-container" style={styles.appContainer}>
       <Header onLogout={onLogout}/>
