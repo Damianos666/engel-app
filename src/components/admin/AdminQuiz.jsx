@@ -11,6 +11,7 @@ export function AdminQuiz() {
   const [quizzes,      setQuizzes]      = useState([]);
   const [selQuiz,      setSelQuiz]      = useState(null);
   const [questions,    setQuestions]    = useState([]);
+  const [usedIds,      setUsedIds]      = useState(new Set()); // pytania użyte jako tip
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(null);
@@ -66,8 +67,12 @@ export function AdminQuiz() {
   async function loadQuestions(quizId) {
     setLoading(true);
     try {
-      const data = await db.get(token, "quiz_questions", `quiz_id=eq.${quizId}&order=created_at.asc&select=*`);
+      const [data, confirmations] = await Promise.all([
+        db.get(token, "quiz_questions", `quiz_id=eq.${quizId}&order=created_at.asc&select=*`),
+        db.get(token, "tip_confirmations", "select=question_id").catch(() => []),
+      ]);
       setQuestions(data);
+      setUsedIds(new Set(confirmations.map(r => r.question_id).filter(Boolean)));
     } catch(e) { setErr("Błąd: " + e.message); }
     finally { setLoading(false); }
   }
@@ -303,7 +308,12 @@ export function AdminQuiz() {
         >
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
             <div style={{fontSize:13,fontWeight:600,color:C.black,lineHeight:1.4,flex:1}}>{i+1}. {q.question}</div>
-            <button onClick={() => openEditQ(q)} style={{background:"none",border:`1px solid ${C.grey}`,padding:"3px 8px",fontSize:11,cursor:"pointer",borderRadius:3,flexShrink:0}}>✏️</button>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              {usedIds.has(q.id) && (
+                <span title="Pytanie było już użyte jako tip dnia" style={{fontSize:14,lineHeight:1}}>✔️</span>
+              )}
+              <button onClick={() => openEditQ(q)} style={{background:"none",border:`1px solid ${C.grey}`,padding:"3px 8px",fontSize:11,cursor:"pointer",borderRadius:3}}>✏️</button>
+            </div>
           </div>
           {["a","b","c"].map(k => (
             <div key={k} style={{
