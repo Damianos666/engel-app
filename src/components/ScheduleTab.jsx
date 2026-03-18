@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { C, GROUPS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
@@ -144,12 +144,32 @@ export function ScheduleTab({ activeGroups }) {
     else setViewMonth(m => m+1);
   }
 
+  // Swipe do zmiany miesiąca
+  const touchStartX = useRef(null);
+  const SWIPE_THRESHOLD = 50; // px
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (dx < 0) nextMonth(); // swipe w lewo → następny miesiąc
+    else prevMonth();        // swipe w prawo → poprzedni miesiąc
+  }, [viewMonth, viewYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const todayStr = today();
 
   return (
     <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",background:C.greyBg,display:"flex",flexDirection:"column",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
 
-      <div style={{background:C.white,margin:"12px 12px 0",borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,.07)",padding:"12px 10px"}}>
+      <div style={{background:C.white,margin:"12px 12px 0",borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,.07)",padding:"12px 10px"}}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
 
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
           <button onClick={prevMonth} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:C.greyDk,padding:"4px 8px"}}>‹</button>
