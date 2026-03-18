@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { C, GROUPS, ADMIN_EMAIL } from "./lib/constants";
-import { auth, db, session } from "./lib/supabase";
+import { auth, db, session, setOnTokenRefreshed } from "./lib/supabase";
 import { calcProgress } from "./lib/helpers";
 import { log, err as logErr } from "./lib/logger";
 import { LangProvider } from "./lib/LangContext";
@@ -128,6 +128,45 @@ function AppRoot() {
       await db.update(user.accessToken, "profiles", `id=eq.${user.id}`, { trainer_view: v });
     } catch(e) { logErr("[TRAINER VIEW] save error:", e.message); }
   }, [user]);
+
+  // Rejestruje callback który db._withRefresh() wywoła po odświeżeniu tokenu.
+  // Dzięki temu React state (user.accessToken) jest zawsze aktualny.
+  useEffect(() => {
+    setOnTokenRefreshed((newToken) => {
+      session.setToken(newToken);
+      setUserRaw(prev => prev ? { ...prev, accessToken: newToken } : prev);
+      log("[TOKEN REFRESH] accessToken zaktualizowany w stanie React");
+    });
+  }, []);
+
+  // Proaktywne odświeżanie tokenu co 50 minut.
+  // JWT Supabase wygasa po 60 min — odświeżamy z 10-minutowym zapasem,
+  // żeby żaden request nie trafił na wygasły token.
+  const refreshTimerRef = useRef(null);
+  const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minut
+
+  const proactiveRefresh = useCallback(async () => {
+    const saved = session.load();
+    if (!saved?.refreshToken) return;
+    try {
+      const refreshed = await auth.refreshSession(saved.refreshToken);
+      session.save(refreshed.access_token, refreshed.refresh_token, refreshed.user);
+      session.setToken(refreshed.access_token);
+      setUserRaw(prev => prev ? { ...prev, accessToken: refreshed.access_token } : prev);
+      log("[TOKEN REFRESH] proaktywne odświeżenie zakończone sukcesem");
+    } catch(e) {
+      logErr("[TOKEN REFRESH] błąd proaktywnego odświeżenia:", e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      if (refreshTimerRef.current) { clearInterval(refreshTimerRef.current); refreshTimerRef.current = null; }
+      return;
+    }
+    refreshTimerRef.current = setInterval(proactiveRefresh, TOKEN_REFRESH_INTERVAL);
+    return () => { if (refreshTimerRef.current) clearInterval(refreshTimerRef.current); };
+  }, [user, proactiveRefresh]);
 
   // Odtwórz sesję z localStorage przy starcie
   useEffect(() => {
