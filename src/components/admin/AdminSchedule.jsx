@@ -95,6 +95,9 @@ export function AdminSchedule({ token }) {
   const [cellW, setCellW] = useState(28); // wartość zastępcza — ResizeObserver natychmiast ją poprawi
   const [showAll, setShowAll] = useState(false);
 
+  // ── Tryb "podnieś i połóż" ──
+  const [liftedBar, setLiftedBar] = useState(null); // entry lub null
+
   // Oblicza offsety pikselowe każdego miesiąca
   const { monthOffsets, totalWidth, originAbsDay: tlOrigin } = useMemo(() => {
     if (!months.length) return { monthOffsets: [], totalWidth: 0, originAbsDay: 0 };
@@ -214,15 +217,29 @@ export function AdminSchedule({ token }) {
     setTimeout(() => window.scrollTo?.({top:9999,behavior:"smooth"}), 60);
   }
 
-  function closeForm() { setFormMode(null); setEditingId(null); setMsg(null); }
+  function closeForm() { setFormMode(null); setEditingId(null); setMsg(null); setLiftedBar(null); }
 
-  // ── Obsługa gestów paska: long-press = usuń, single-tap = edytuj, double-tap = toggle status ──
-  function handleBarPressStart(barId, e) {
+  // Escape: anuluj lift lub zamknij formularz
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") { setLiftedBar(null); setFormMode(null); setEditingId(null); setMsg(null); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ── Obsługa gestów paska:
+  //    long-press (650ms) = usuń szkolenie (z potwierdzeniem)
+  //    single-tap         = podnieś + otwórz formularz edycji jednocześnie
+  //    double-tap         = toggle planned/active (bez zmian)
+  function handleBarPressStart(bar, e) {
+    const barId = bar.id;
     if (e.type === "touchstart") e.preventDefault();
     pressTimers.current[barId] = setTimeout(() => {
       delete pressTimers.current[barId];
       if (tapTimers.current[barId]) { clearTimeout(tapTimers.current[barId]); delete tapTimers.current[barId]; }
       tapCounts.current[barId] = 0;
+      setLiftedBar(null);
       if (window.confirm("Usunąć to szkolenie z terminarza?")) deleteEntry(barId);
     }, 650);
   }
@@ -236,6 +253,12 @@ export function AdminSchedule({ token }) {
     if (tapCounts.current[barId] === 1) {
       tapTimers.current[barId] = setTimeout(() => {
         tapCounts.current[barId] = 0; delete tapTimers.current[barId];
+        // single-tap: jeśli ten sam pasek jest już podniesiony → odłóż i zamknij
+        if (liftedBar?.id === bar.id) {
+          setLiftedBar(null); closeForm(); return;
+        }
+        // inaczej: podnieś + otwórz formularz edycji jednocześnie
+        setLiftedBar(bar.entry);
         openEditForm(bar.entry);
       }, 280);
     } else {
@@ -346,6 +369,34 @@ export function AdminSchedule({ token }) {
     } catch(e) { addToast("Błąd usuwania: "+e.message); }
   }
 
+  // ── Przenieś szkolenie (tryb "podnieś i połóż") ──
+  async function moveEntry(entry, newDate, newTrainerId) {
+    const days = entry.duration_days
+      || parseDays(TRAININGS.find(t => t.id === entry.training_id)?.duration)
+      || 1;
+    const newEndDate = addDays(newDate, days - 1);
+    // Optymistyczna aktualizacja UI
+    setScheduled(s => s.map(x => x.id === entry.id
+      ? { ...x, date: newDate, end_date: newEndDate, trainer_id: newTrainerId }
+      : x
+    ));
+    try {
+      const result = await db.update(token, "scheduled_trainings", `id=eq.${entry.id}`, {
+        date: newDate, end_date: newEndDate, trainer_id: newTrainerId,
+      });
+      if (Array.isArray(result) && result.length === 0)
+        throw new Error("0 wierszy zaktualizowanych — sprawdź uprawnienia RLS");
+      addToast("✓ Szkolenie przeniesione");
+    } catch(e) {
+      // Rollback
+      setScheduled(s => s.map(x => x.id === entry.id
+        ? { ...x, date: entry.date, end_date: entry.end_date, trainer_id: entry.trainer_id }
+        : x
+      ));
+      addToast("Błąd przenoszenia: " + e.message);
+    }
+  }
+
   // ── Timeline ──
   const todayISO = toISO(now);
 
@@ -370,6 +421,23 @@ export function AdminSchedule({ token }) {
         __preview: true, __color: isST ? "#8E44AD" : (grp?.color || "#2980B9"),
         __title: isST ? (stName||"ST") : (training?.short||"?"), status: "active",
       });
+    }
+    // Live preview dla edycji — zastąp edytowany wpis wersją z bieżącymi polami
+    if (formMode === "edit" && editingId && selDate && selTrainer) {
+      const isST = trainingMode === "ST";
+      const training = isST ? null : TRAININGS.find(t=>t.id===selTraining);
+      const grp = GROUPS.find(g=>g.id===training?.group);
+      const idx = allEntries.findIndex(x => x.id === editingId);
+      if (idx !== -1) {
+        allEntries[idx] = {
+          ...allEntries[idx],
+          date: selDate, end_date: previewEndDate,
+          training_id: isST ? "ST" : selTraining, trainer_id: selTrainer,
+          custom_name: isST ? (stName||"ST") : null,
+          __color: isST ? "#8E44AD" : (grp?.color || "#2980B9"),
+          __title: isST ? (stName||"ST") : (training?.short||"?"),
+        };
+      }
     }
 
     return TIMELINE_TRAINERS.map(trainerId => {
@@ -396,7 +464,7 @@ export function AdminSchedule({ token }) {
         .filter(Boolean);
       return { trainerId, bars };
     });
-  }, [scheduled, months, cellW, formMode, selDate, selTraining, trainingMode, stName, previewEndDate, selTrainer]);
+  }, [scheduled, months, cellW, formMode, editingId, selDate, selTraining, trainingMode, stName, previewEndDate, selTrainer]);
 
   const upcoming = scheduled.filter(s => (s.end_date||s.date) >= todayISO);
   const LIST_LIMIT = 8;
@@ -415,27 +483,33 @@ export function AdminSchedule({ token }) {
       );
     }
     const badgeVal = bar.participantsCount != null ? bar.participantsCount : null;
+    const isLifted = liftedBar?.id === bar.id;
     return (
       <div
-        onMouseDown={e => handleBarPressStart(bar.id, e)}
+        onMouseDown={e => handleBarPressStart(bar, e)}
         onMouseUp={e => handleBarPressEnd(bar, e)}
         onMouseLeave={() => handleBarPressCancel(bar.id)}
-        onTouchStart={e => handleBarPressStart(bar.id, e)}
+        onTouchStart={e => handleBarPressStart(bar, e)}
         onTouchEnd={e => handleBarPressEnd(bar, e)}
         onTouchMove={() => handleBarPressCancel(bar.id)}
         onContextMenu={e => e.preventDefault()}
-        title={`${bar.title}${bar.isPlanned?" [planowane]":""}${bar.isHidden?" [ukryte]":""}${bar.isOutgoing?" [wyjazdowe]":""}\nTap=edytuj · 2×tap=planned · przytrzymaj=usuń`}
+        title={`${bar.title}${bar.isPlanned?" [planowane]":""}${bar.isHidden?" [ukryte]":""}${bar.isOutgoing?" [wyjazdowe]":""}\nTap=przenieś · 2×tap=planned · przytrzymaj=edytuj`}
         style={{
-          position:"absolute",left:bar.left,top:4,height:22,width:bar.width,zIndex:2,
+          position:"absolute",left:bar.left,top: isLifted ? 2 : 4,height: isLifted ? 26 : 22,width:bar.width,
+          zIndex: isLifted ? 10 : 2,
           background:bar.color,borderRadius:3,display:"flex",alignItems:"center",
           padding:"0 3px",gap:2,cursor:"pointer",overflow:"hidden",boxSizing:"border-box",
           opacity: bar.isPlanned ? 0.75 : 1,
-          border: bar.isHidden ? "1px solid rgba(0,0,0,.35)" : "none",
+          border: isLifted
+            ? `2px solid #fff`
+            : bar.isHidden ? "1px solid rgba(0,0,0,.35)" : "none",
+          boxShadow: isLifted ? `0 0 0 2px ${bar.color}, 0 4px 10px rgba(0,0,0,.35)` : "none",
+          transition: "box-shadow .15s, transform .15s, top .1s, height .1s",
         }}>
         {bar.isHidden && <span style={{flexShrink:0,fontSize:7,color:"rgba(255,255,255,.85)",lineHeight:1}}>🔒</span>}
         {bar.isOutgoing && !bar.isHidden && <span style={{flexShrink:0,fontSize:7,color:"rgba(255,255,255,.85)",lineHeight:1}}>✈️</span>}
         <span style={{fontSize:8,fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>
-          {bar.title}{bar.isPlanned?" ···":""}
+          {bar.title}{bar.isPlanned?" ···":""}{isLifted?" ✋":""}
         </span>
         {badgeVal !== null && (
           <span style={{flexShrink:0,background:"rgba(0,0,0,.35)",borderRadius:"50%",width:12,height:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:"#fff",lineHeight:"12px",fontWeight:700}}>
@@ -498,7 +572,15 @@ export function AdminSchedule({ token }) {
                       const isToday=iso===todayISO;
                       const isWe=new Date(iso+"T12:00:00").getDay()%6===0;
                       const isHol2=!!holidays[iso];
-                      return <div key={`${mi}-${d}`} onClick={()=>openNewForm(iso,tid)} title={holidays[iso]||undefined} style={{position:"absolute",left:monthOffsets[mi]+(d-1)*cellW,top:0,width:cellW,height:"100%",background:isToday?"rgba(138,183,62,.12)":(isWe||isHol2)?"rgba(0,0,0,.05)":"transparent",cursor:"pointer",zIndex:0}}/>;
+                      return <div key={`${mi}-${d}`} onClick={()=>{
+                        if (liftedBar) {
+                          moveEntry(liftedBar, iso, tid);
+                          setLiftedBar(null);
+                          closeForm();
+                        } else {
+                          openNewForm(iso, tid);
+                        }
+                      }} title={holidays[iso]||undefined} style={{position:"absolute",left:monthOffsets[mi]+(d-1)*cellW,top:0,width:cellW,height:"100%",background:liftedBar?(isToday?"rgba(138,183,62,.25)":"rgba(41,128,185,.07)"):isToday?"rgba(138,183,62,.12)":(isWe||isHol2)?"rgba(0,0,0,.05)":"transparent",cursor:liftedBar?"copy":"pointer",zIndex:0}}/>;
                     }))}
                     {/* Linie pionowe */}
                     {months.map((mon,mi)=>Array.from({length:_daysInMon(mon.year,mon.month)},(_,i)=>i+1).map(d=>(
@@ -518,8 +600,24 @@ export function AdminSchedule({ token }) {
         </div>
       </div>
 
-      {/* ── Anuluj / formularz ── */}
-      {formMode && (
+      {/* ── Banner trybu przenoszenia ── */}
+      {liftedBar && (() => {
+        const isST = liftedBar.training_id === "ST";
+        const t = isST ? null : TRAININGS.find(x => x.id === liftedBar.training_id);
+        const title = isST ? (liftedBar.custom_name || "ST") : (t?.short || liftedBar.training_id);
+        return (
+          <div style={{background:"#2980B9",color:"#fff",padding:"10px 14px",borderRadius:6,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <span>✋ <strong>{title}</strong> — dotknij komórki aby przenieść · edytuj szczegóły poniżej · tap na pasek aby anulować</span>
+            <button onClick={() => { setLiftedBar(null); closeForm(); }}
+              style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",padding:"4px 12px",borderRadius:4,cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>
+              ✕ Anuluj
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* ── Anuluj (tylko dla trybu nowego) ── */}
+      {formMode === "new" && (
         <button onClick={closeForm}
           style={{background:C.greyDk,color:C.white,border:"none",padding:"13px 0",fontSize:13,fontWeight:700,cursor:"pointer",borderRadius:6}}>
           ✕ Anuluj
@@ -647,11 +745,17 @@ export function AdminSchedule({ token }) {
                 style={{width:"100%",background:saving?C.greyDk:C.greenDk,color:C.white,border:"none",padding:14,fontSize:13,fontWeight:700,borderRadius:6,cursor:saving?"not-allowed":"pointer"}}>
                 {saving ? "Zapisywanie…" : "✓ Zapisz zmiany"}
               </button>
-              <button
-                onClick={()=>{ if(window.confirm("Usunąć to szkolenie z terminarza?")) { deleteEntry(editingId); closeForm(); } }}
-                style={{width:"100%",background:"none",color:C.red,border:`1.5px solid ${C.red}`,padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
-                🗑 Usuń szkolenie
-              </button>
+              <div style={{display:"flex",gap:8}}>
+                <button
+                  onClick={()=>{ if(window.confirm("Usunąć to szkolenie z terminarza?")) { deleteEntry(editingId); closeForm(); } }}
+                  style={{flex:1,background:"none",color:C.red,border:`1.5px solid ${C.red}`,padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
+                  🗑 Usuń
+                </button>
+                <button onClick={closeForm}
+                  style={{flex:1,background:C.greyDk,color:C.white,border:"none",padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
+                  ✕ Anuluj
+                </button>
+              </div>
             </div>
           )}
         </div>
