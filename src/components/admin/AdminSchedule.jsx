@@ -92,6 +92,7 @@ export function AdminSchedule({ token }) {
   const isExtending        = useRef(false);
   const scrollRestoreDate  = useRef(null); // data środka widoku — przywracana po zmianie cellW
   const isOrientChanging   = useRef(false); // blokuje nadpisanie scrollRestoreDate przez scroll event podczas obrotu
+  const dragScroll         = useRef({ active: false, startX: 0, startSL: 0 }); // drag-to-scroll myszą
 
   // Liczba dni widocznych w oknie bez scrollowania — zmień 12 na inną wartość aby dostosować szerokość komórek
   const [cellW, setCellW] = useState(28); // wartość zastępcza — ResizeObserver natychmiast ją poprawi
@@ -177,14 +178,6 @@ export function AdminSchedule({ token }) {
     timelineRef.current.scrollLeft = Math.max(0, left - timelineRef.current.clientWidth / 2);
   }, [cellW, tlOrigin]);
 
-  // Synchronizuj scrollRestoreDate z selDate — kiedy user wybierze datę w formularzu,
-  // przechowaj ją aby przywrócić po orientationchange
-  useEffect(() => {
-    if (selDate && formMode) {
-      scrollRestoreDate.current = selDate;
-    }
-  }, [selDate, formMode]);
-
   useEffect(() => { loadScheduled(); }, []);
 
   useEffect(() => {
@@ -267,7 +260,6 @@ export function AdminSchedule({ token }) {
   function openNewForm(date, trainerId) {
     setFormMode("new"); setEditingId(null);
     setSelDate(date); setSelTrainer(trainerId);
-    scrollRestoreDate.current = date; // Przechowaj wybraną datę przed orientationchange
     resetFormFields(); setMsg(null);
     setTimeout(() => window.scrollTo?.({top:9999,behavior:"smooth"}), 60);
   }
@@ -277,7 +269,6 @@ export function AdminSchedule({ token }) {
     const training = isST ? null : TRAININGS.find(t=>t.id===entry.training_id);
     setFormMode("edit"); setEditingId(entry.id);
     setSelDate(entry.date || ""); setSelTrainer(Number(entry.trainer_id) || null);
-    scrollRestoreDate.current = entry.date || ""; // Przechowaj datę edytowanego wpisu
     setTrainingMode(isST ? "ST" : "normal");
     setSelGroup(training?.group || GROUPS[0].id);
     setSelTraining(isST ? (TRAININGS.find(t=>t.group===GROUPS[0].id)?.id || TRAININGS[0].id) : entry.training_id);
@@ -577,6 +568,7 @@ export function AdminSchedule({ token }) {
     return (
       <div
         ref={barDivRef}
+        data-bar="1"
         onMouseDown={e => handleBarPressStart(bar, e)}
         onMouseUp={e => handleBarPressEnd(bar, e)}
         onMouseLeave={() => handleBarPressCancel(bar.id)}
@@ -619,7 +611,31 @@ export function AdminSchedule({ token }) {
           <span style={{fontSize:13,fontWeight:700,color:C.black}}>{MONTHS_PL[visibleLabel.month]} {visibleLabel.year}</span>
         </div>
 
-        <div ref={timelineRef} onScroll={onTimelineScroll} style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        <div
+          ref={timelineRef}
+          onScroll={onTimelineScroll}
+          onPointerDown={e => {
+            // tylko lewy przycisk myszy, nie na paskach (zIndex 2+)
+            if (e.button !== 0 || e.target.closest("[data-bar]")) return;
+            dragScroll.current = { active: true, startX: e.clientX, startSL: timelineRef.current.scrollLeft };
+            timelineRef.current.setPointerCapture(e.pointerId);
+            timelineRef.current.style.cursor = "grabbing";
+          }}
+          onPointerMove={e => {
+            const ds = dragScroll.current;
+            if (!ds.active) return;
+            const delta = ds.startX - e.clientX;
+            timelineRef.current.scrollLeft = ds.startSL + delta;
+          }}
+          onPointerUp={e => {
+            dragScroll.current.active = false;
+            timelineRef.current.style.cursor = "";
+          }}
+          onPointerCancel={e => {
+            dragScroll.current.active = false;
+            timelineRef.current.style.cursor = "";
+          }}
+          style={{overflowX:"auto",WebkitOverflowScrolling:"touch",cursor:"grab"}}>
           <div style={{display:"inline-block",minWidth:"100%",verticalAlign:"top"}}>
 
             {/* Nagłówek dni — ciągły przez wszystkie miesiące */}
