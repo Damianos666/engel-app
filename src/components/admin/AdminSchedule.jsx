@@ -617,16 +617,15 @@ export function AdminSchedule({ token }) {
           onPointerDown={e => {
             // tylko lewy przycisk myszy, nie na paskach (zIndex 2+)
             if (e.button !== 0 || e.target.closest("[data-bar]")) return;
-            // Zapisz punkt startowy ale NIE przechwytuj pointera od razu —
-            // setPointerCapture blokuje onClick na komórkach siatki.
-            // Capture następuje dopiero po przekroczeniu progu ruchu (4px).
-            dragScroll.current = { active: false, captured: false, startX: e.clientX, startSL: timelineRef.current.scrollLeft, pointerId: e.pointerId };
+            // pending=true oznacza że przycisk jest wciśnięty ale drag jeszcze nie aktywny.
+            // setPointerCapture następuje dopiero po przekroczeniu progu ruchu (4px)
+            // — dzięki temu onClick na komórkach siatki działa normalnie.
+            dragScroll.current = { pending: true, active: false, captured: false, startX: e.clientX, startSL: timelineRef.current.scrollLeft, pointerId: e.pointerId };
           }}
           onPointerMove={e => {
             const ds = dragScroll.current;
-            if (ds.startX === undefined) return;
+            if (!ds.pending) return;
             const delta = ds.startX - e.clientX;
-            // Aktywuj przeciąganie dopiero po ruszeniu o >4px
             if (!ds.active && Math.abs(delta) > 4) {
               ds.active = true;
               if (!ds.captured) {
@@ -639,11 +638,11 @@ export function AdminSchedule({ token }) {
             timelineRef.current.scrollLeft = ds.startSL + delta;
           }}
           onPointerUp={e => {
-            dragScroll.current = { active: false, captured: false };
+            dragScroll.current = { pending: false, active: false, captured: false };
             timelineRef.current.style.cursor = "";
           }}
           onPointerCancel={e => {
-            dragScroll.current = { active: false, captured: false };
+            dragScroll.current = { pending: false, active: false, captured: false };
             timelineRef.current.style.cursor = "";
           }}
           style={{overflowX:"auto",WebkitOverflowScrolling:"touch",cursor:"grab"}}>
