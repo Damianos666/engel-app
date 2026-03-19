@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from "react";
-import { C, MSG_TYPES, ADMIN_EMAIL, DEV_PANEL_ENABLED } from "../lib/constants";
+import { C, MSG_TYPES, DEV_PANEL_ENABLED } from "../lib/constants";
 import { db } from "../lib/supabase";
 import { formatDate } from "../lib/helpers";
 import { Spinner, Toggle } from "./SharedUI";
@@ -577,7 +577,7 @@ function DevPanel({ token, userId, onDevDate, seenDates, devQuizDone, onReset, o
 export function MessagesTab({ onTipConfirmed }) {
   const T = useT();
   const { user, token } = useUser();
-  const isAdmin   = user?.role === "admin" || user?.email === ADMIN_EMAIL;
+  const isAdmin   = user?.role === "admin";
   const isDevUser = DEV_PANEL_ENABLED && (isAdmin || (user?.trainer_id != null));
   const [devDateStr,   setDevDateStr]   = useState(null);
   const [devSeenDates, setDevSeenDates] = useState(new Set()); // Set<ISO string>
