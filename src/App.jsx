@@ -290,6 +290,9 @@ function AppRoot() {
 
   const handleLogout = useCallback(async () => {
     try { await auth.signOut(user?.accessToken); } catch {}
+    // BEZPIECZEŃSTWO: czyścimy cache Service Workera przy wylogowaniu —
+    // dane API poprzedniego użytkownika nie zostają na urządzeniu.
+    try { await caches.delete("supabase-api"); } catch {}
     localStorage.removeItem("eea_trainer_view");
     setUserRaw(null); setCompleted([]); setTab(0); setMsgCount(0);
     setTrainerViewRaw("client"); setTrainingOverrides({});
