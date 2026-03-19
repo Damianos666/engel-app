@@ -22,8 +22,6 @@ export const MSG_TYPES = {
   alert:   { color:C.red,     bg:"#FDEDEC", icon:"🔔" },
 };
 
-export const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
-
 // ─── FLAGA: Panel Dewelopera dla trenerów ────────────────────────────────────
 // true  → trenerzy widzą Panel Dewelopera (symulator cyklu, reset sesji)
 // false → panel ukryty (tryb produkcyjny)
