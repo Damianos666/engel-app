@@ -617,22 +617,33 @@ export function AdminSchedule({ token }) {
           onPointerDown={e => {
             // tylko lewy przycisk myszy, nie na paskach (zIndex 2+)
             if (e.button !== 0 || e.target.closest("[data-bar]")) return;
-            dragScroll.current = { active: true, startX: e.clientX, startSL: timelineRef.current.scrollLeft };
-            timelineRef.current.setPointerCapture(e.pointerId);
-            timelineRef.current.style.cursor = "grabbing";
+            // Zapisz punkt startowy ale NIE przechwytuj pointera od razu —
+            // setPointerCapture blokuje onClick na komórkach siatki.
+            // Capture następuje dopiero po przekroczeniu progu ruchu (4px).
+            dragScroll.current = { active: false, captured: false, startX: e.clientX, startSL: timelineRef.current.scrollLeft, pointerId: e.pointerId };
           }}
           onPointerMove={e => {
             const ds = dragScroll.current;
-            if (!ds.active) return;
+            if (ds.startX === undefined) return;
             const delta = ds.startX - e.clientX;
+            // Aktywuj przeciąganie dopiero po ruszeniu o >4px
+            if (!ds.active && Math.abs(delta) > 4) {
+              ds.active = true;
+              if (!ds.captured) {
+                timelineRef.current.setPointerCapture(ds.pointerId);
+                ds.captured = true;
+              }
+              timelineRef.current.style.cursor = "grabbing";
+            }
+            if (!ds.active) return;
             timelineRef.current.scrollLeft = ds.startSL + delta;
           }}
           onPointerUp={e => {
-            dragScroll.current.active = false;
+            dragScroll.current = { active: false, captured: false };
             timelineRef.current.style.cursor = "";
           }}
           onPointerCancel={e => {
-            dragScroll.current.active = false;
+            dragScroll.current = { active: false, captured: false };
             timelineRef.current.style.cursor = "";
           }}
           style={{overflowX:"auto",WebkitOverflowScrolling:"touch",cursor:"grab"}}>
