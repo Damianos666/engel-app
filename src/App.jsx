@@ -74,6 +74,7 @@ function AppRoot() {
   const [trainerView,       setTrainerViewRaw]  = useState("client");
   const [trainingOverrides, setTrainingOverrides] = useState({});
   const [gameData,          setGameData]         = useState({ points: 0, streak_current: 0 });
+  const [gramRefreshKey,    setGramRefreshKey]   = useState(0);
 
   const lastMsgAt    = useRef(null);
   const pollInterval = useRef(null);
@@ -301,6 +302,7 @@ function AppRoot() {
       const rows = await db.get(user.accessToken, "user_gamification", `user_id=eq.${user.id}&select=points,streak_current`);
       const gd = rows[0] || { points: 0, streak_current: 0 };
       setGameData({ points: gd.points || 0, streak_current: gd.streak_current || 0 });
+      setGramRefreshKey(k => k + 1);
     } catch {}
   }, [user]);
   // Wcześniej wywoływany niezależnie w App, TrainingTab i ProfileTab = 3x ta sama praca.
@@ -379,6 +381,7 @@ function AppRoot() {
           onComplete={handleComplete}
           gameData={gameData}
           onTipConfirmed={refreshGameData}
+          gramRefreshKey={gramRefreshKey}
         />
       )}
     </UserContext.Provider>
@@ -443,7 +446,7 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
 }
 
 /* ─── WIDOK KLIENTA ──────────────────────────────────────────────────────── */
-function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed }) {
+function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed, gramRefreshKey }) {
   const { user } = useUser();
   const [showGram, setShowGram] = useState(false);
 
@@ -494,7 +497,7 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
         </div>
       </div>
       <TabBar tab={tab} setTab={setTab} completedCount={completed.length} msgCount={msgCount}/>
-      {showGram && <GramTab onClose={() => setShowGram(false)} onGoToMessages={() => { setShowGram(false); setTab(3); }}/>}
+      {showGram && <GramTab key={gramRefreshKey} onClose={() => setShowGram(false)} onGoToMessages={() => { setShowGram(false); setTab(3); }}/>}
     </div>
   );
 }
