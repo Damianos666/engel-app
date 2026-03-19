@@ -65,12 +65,6 @@ export default defineConfig(({ mode }) => {
             // ładowanego lazy — nie blokuje pierwszego render'u
             'react-vendor':   ['react', 'react-dom'],
             'react-pdf':      ['@react-pdf/renderer'],
-            'fullcalendar':   [
-              '@fullcalendar/core',
-              '@fullcalendar/react',
-              '@fullcalendar/interaction',
-              '@fullcalendar/resource-timeline',
-            ],
           },
         },
       },
