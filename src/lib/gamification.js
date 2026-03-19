@@ -117,27 +117,25 @@ export function getProgramInfo(programStartDate, referenceDateStr = null) {
 
 /**
  * Zwraca tablicę 6 pytań dla bieżącego cyklu 7-dniowego.
- * Cykl N → offset N*6 w puli → brak powtórzeń między cyklami.
- * Dzień 7 quizuje DOKŁADNIE te same 6 pytań co dni 1–6 tego cyklu.
+ *
+ * Logika nieskończonej rotacji:
+ *   - Pytania posortowane wg created_at (stała kolejność, niezależna od długości puli)
+ *   - Globalny indeks startowy = cycleNumber * 6 (rośnie bez końca)
+ *   - Zawijamy modulo n, ale NIGDY w obrębie jednego cyklu (brak nakładek)
+ *   - Dodanie pytań do bazy przedłuża unikalny okres bez retroaktywnych zmian
+ *   - Dzień 7 quizuje DOKŁADNIE te same 6 pytań co dni 1–6 tego cyklu
+ *
+ * Przykład z 12 pytaniami: cykl 1→[0–5], cykl 2→[6–11], cykl 3→[0–5] (repeat po 2 cyklach)
+ * Po dodaniu 6 pytań (18 total): cykl 3→[12–17], cykl 4→[0–5] — unikalny okres rośnie
  */
 export function getWeekQuestions(questions, programStartDate = null, referenceDateStr = null) {
   if (!questions || !questions.length) return [];
   const { cycleNumber } = getProgramInfo(programStartDate, referenceDateStr);
-  const offset  = (cycleNumber * 6) % questions.length;
-  const result  = [];
-  const usedIds = new Set();
+  const n           = questions.length;
+  const globalStart = cycleNumber * 6;
+  const result      = [];
   for (let i = 0; i < 6; i++) {
-    let idx   = (offset + i) % questions.length;
-    let tries = 0;
-    while (usedIds.has(questions[idx]?.id) && tries < questions.length) {
-      idx = (idx + 1) % questions.length;
-      tries++;
-    }
-    const q = questions[idx];
-    if (q && !usedIds.has(q.id)) {
-      result.push(q);
-      usedIds.add(q.id);
-    }
+    result.push(questions[(globalStart + i) % n]);
   }
   return result;
 }
