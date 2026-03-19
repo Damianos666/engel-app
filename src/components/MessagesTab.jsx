@@ -37,10 +37,10 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen })
         // Pobierz program_start_date żeby wybrać właściwe pytanie cyklu
         const gameRows = await db.get(token, "user_gamification", `user_id=eq.${userId}&select=program_start_date`).catch(() => []);
         const programStartDate = gameRows[0]?.program_start_date || null;
-        // getDailyTipFromCycle → spójne z pytaniami quizu tygodniowego
-        const q = programStartDate
-          ? getDailyTipFromCycle(questions, programStartDate, devDateStr)
-          : getDailyTipQuestion(questions, today); // fallback gdy brak daty startu
+        // getDailyTipFromCycle → spójne z pytaniami quizu tygodniowego.
+        // Na D1 (brak program_start_date) używamy today jako tymczasowego startu —
+        // dayInCycle=0 → zawsze getWeekQuestions[0], spójne z quizem D7.
+        const q = getDailyTipFromCycle(questions, programStartDate || today, devDateStr);
         setTipQ(q);
         // W trybie dev zawsze startuj jako niepotwierdzone — ignoruj bazę
         setConfirmed(devDateStr ? false : tipConfs.length > 0);
@@ -195,14 +195,16 @@ function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDev
         }
       }
       // W trybie symulacji nie dodajemy punktów do prawdziwego konta
-      if (res.points > 0 && !isDevMode) {
+      if (!isDevMode) {
         const gameRows = await db.get(token, "user_gamification", `user_id=eq.${userId}&select=*`).catch(() => []);
         const gd = gameRows[0] || { points: 0, streak_current: 0, streak_last_date: null };
+        // Quiz tygodniowy podtrzymuje streak — bez aktualizacji streak się zeruje na D1 kolejnego cyklu
+        const newStreak = calcNewStreak(gd.streak_current, gd.streak_last_date, today);
         await db.upsert(token, "user_gamification", {
           user_id:            userId,
-          points:             (gd.points || 0) + res.points,
-          streak_current:     gd.streak_current  || 0,
-          streak_last_date:   gd.streak_last_date || null,
+          points:             (gd.points || 0) + (res.points || 0),
+          streak_current:     newStreak,
+          streak_last_date:   today,
           program_start_date: gd.program_start_date || today,
         }, "user_id");
       }
