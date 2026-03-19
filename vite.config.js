@@ -48,7 +48,9 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'supabase-api',
-                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
+                // BEZPIECZEŃSTWO: 5 minut zamiast 24h — przy współdzielonym urządzeniu
+                // następny użytkownik nie zobaczy danych poprzedniego po wylogowaniu.
+                expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
               },
             },
           ],
