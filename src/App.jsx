@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense } from "react";
-import { C, GROUPS, ADMIN_EMAIL } from "./lib/constants";
+import { C, GROUPS } from "./lib/constants";
 import { auth, db, session, setOnTokenRefreshed } from "./lib/supabase";
 import { calcProgress } from "./lib/helpers";
 import { log, err as logErr } from "./lib/logger";
@@ -337,11 +337,9 @@ function AppRoot() {
 
   if (!user) return <LoginScreen onLogin={handleLogin}/>;
 
-  // BEZPIECZEŃSTWO: Sprawdzenie roli odbywa się PO stronie serwera (Supabase RLS).
-  // Ten warunek decyduje tylko o tym, który UI pokazujemy — nie o dostępie do danych.
-  // VITE_ADMIN_EMAIL to fallback dla kont które nie mają roli "admin" w bazie.
-  // UWAGA: VITE_ env vars są widoczne w bundlu JS — nie umieszczaj tu sekretów!
-  const isAdmin = user.role === "admin" || user.email === ADMIN_EMAIL;
+  // BEZPIECZEŃSTWO: Rola "admin" pochodzi wyłącznie z kolumny `role` w tabeli `profiles`
+  // chronionej przez RLS. Email admina nie jest nigdzie w kodzie klienta.
+  const isAdmin = user.role === "admin";
 
   const isTrainer     = user.trainer_id != null;
   const inTrainerView = isTrainer && trainerView === "trainer";
