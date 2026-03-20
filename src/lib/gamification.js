@@ -158,10 +158,14 @@ export function isQuizDay(programStartDate, referenceDateStr = null) {
 }
 export function calcNewStreak(currentStreak, lastDate, todayStr) {
   if (!lastDate) return 1;
-  const yesterday = new Date(todayStr + "T00:00:00");
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
-  if (lastDate === yesterdayStr) return (currentStreak || 0) + 1;
-  if (lastDate === todayStr)    return currentStreak || 1; // już policzone
-  return 1; // seria przerwana
+  if (lastDate === todayStr) return currentStreak || 1; // już policzone dziś
+
+  // Południe UTC eliminuje ryzyko błędów stref czasowych i czasu letniego.
+  // Różnica 1 doby = dokładnie 86 400 000 ms niezależnie od lokalizacji.
+  const last  = new Date(lastDate + "T12:00:00Z");
+  const today = new Date(todayStr + "T12:00:00Z");
+  const diffDays = Math.round((today - last) / 86400000);
+
+  if (diffDays === 1) return (currentStreak || 0) + 1; // wczoraj → kontynuacja
+  return 1; // 2+ dni przerwy → reset
 }
