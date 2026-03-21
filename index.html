@@ -198,6 +198,11 @@
       }
 
       setAppSize();
+      // iOS PWA przy starcie raportuje błędną wysokość zanim viewport się ustabilizuje.
+      // Te same opóźnienia co przy obrocie — rozwiązują identyczny problem ze szarym paskiem.
+      setTimeout(setAppSize, 50);
+      setTimeout(setAppSize, 200);
+      setTimeout(setAppSize, 500);
 
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', setAppSize);
