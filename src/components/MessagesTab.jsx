@@ -14,7 +14,7 @@ const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "";
 const toISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
 /* ─── TipBanner — Tip dnia na górze zakładki Wiadomości ─────────────────── */
-function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen }) {
+function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, currentDate }) {
   const [tipQ,       setTipQ]       = useState(null);
   const [confirmed,  setConfirmed]  = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -48,7 +48,7 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen })
       finally { setLoading(false); }
     }
     load();
-  }, [token, userId, devDateStr]);
+  }, [token, userId, devDateStr, currentDate]);
 
   async function handleConfirm() {
     if (confirming || confirmed || !tipQ) return;
@@ -135,7 +135,7 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen })
 }
 
 /* ─── WeeklyQuizBanner — pojawia się w 7. dniu w Wiadomościach ──────────── */
-function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDevQuizDone }) {
+function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDevQuizDone, currentDate }) {
   const [quizDone,    setQuizDone]    = useState(false);
   const [questions,   setQuestions]   = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -171,7 +171,7 @@ function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDev
       finally { setLoading(false); }
     }
     load();
-  }, [token, userId, devDateStr]);
+  }, [token, userId, devDateStr, currentDate]);
 
   async function handleResult(res) {
     setShowQuiz(false);
@@ -637,6 +637,20 @@ export function MessagesTab({ onTipConfirmed }) {
   const userMail  = user?.email       || "";
   const userRole  = user?.role        || "";
   const userFirma = user?.firma       || "";
+  // Bieżąca data — aktualizuje się gdy użytkownik wraca do app po północy.
+  // Zmiana tej wartości wymusza przeładowanie TipBanner i WeeklyQuizBanner.
+  const [currentDate, setCurrentDate] = useState(toISO());
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        const today = toISO();
+        setCurrentDate(prev => prev !== today ? today : prev);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const [messages,  setMessages]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [err,       setErr]       = useState("");
@@ -724,6 +738,7 @@ export function MessagesTab({ onTipConfirmed }) {
           onConfirmed={onTipConfirmed}
           devDateStr={devDateStr}
           onDevSeen={handleDevTipSeen}
+          currentDate={currentDate}
         />
       )}
 
@@ -735,6 +750,7 @@ export function MessagesTab({ onTipConfirmed }) {
           onConfirmed={onTipConfirmed}
           devDateStr={devDateStr}
           onDevQuizDone={handleDevQuizDone}
+          currentDate={currentDate}
         />
       )}
 
