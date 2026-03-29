@@ -9,8 +9,34 @@ export function LoginScreen({ onLogin }) {
   const T = useT();
   const { lang, switchLang } = useLang();
   const [mode, setMode] = useState("login");
+  const [debugLog, setDebugLog] = useState("");
+
+  useEffect(() => {
+    // Odśwież co 500ms, aby widzieć zmiany na żywo
+    const i = setInterval(() => {
+      const root = document.getElementById("root");
+      const html = document.documentElement;
+      const metrics = [
+        `window.innerHeight: ${window.innerHeight}`,
+        `screen.height: ${window.screen.height}`,
+        `visualViewport: ${window.visualViewport?.height || "N/A"}`,
+        `body clientHeight: ${document.body.clientHeight}`,
+        `root clientHeight: ${root?.clientHeight}`,
+        `--safe-bottom: ${getComputedStyle(html).getPropertyValue("--safe-bottom")}`,
+      ].join("\\n");
+      setDebugLog(metrics);
+    }, 500);
+    return () => clearInterval(i);
+  }, []);
+
   return (
     <div className="app-container" style={{height:"100%",display:"flex",flexDirection:"column",fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",overflow:"hidden",background:C.greyBg}}>
+      
+      {/* Pływające okienko Debug */}
+      <div style={{position:"fixed", top:0, left:0, zIndex:9999, background:"rgba(0,0,0,0.8)", color:"#0f0", fontSize:10, fontFamily:"monospace", padding:8, pointerEvents:"none", whiteSpace:"pre-wrap"}}>
+        {debugLog}
+      </div>
+
       <Header/>
       <div style={{background:C.greyBanner,borderBottom:`1px solid #D0D3D6`,padding:"11px 20px",textAlign:"center"}}>
         <strong style={{display:"block",fontSize:15,color:C.black,marginBottom:2}}>ENGEL Expert Academy</strong>
