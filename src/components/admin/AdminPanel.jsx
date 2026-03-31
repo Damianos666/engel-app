@@ -3,11 +3,18 @@ import { C, GROUPS } from "../../lib/constants";
 import { AdminMessages } from "./AdminMessages";
 import { AdminTrainings } from "./AdminTrainings";
 import { AdminSchedule } from "./AdminSchedule";
+import { AdminBatchComplete } from "./AdminBatchComplete";
 import { ScheduleTab } from "../ScheduleTab";
 
 const LOGO_URL = "/logo.png";
 const ALL_GROUPS = GROUPS.map(g => g.id);
-const ADMIN_TABS = [["Terminarz","📅"],["Terminarz w.k.","👁"],["Wiadomości","✉"],["Edytor szkoleń","📋"]];
+const ADMIN_TABS = [
+  ["Terminarz",      "📅"],
+  ["Terminarz w.k.", "👁"],
+  ["Wiadomości",     "✉"],
+  ["Edytor szkoleń", "📋"],
+  ["Zaliczenia",     "🎓"],
+];
 
 const tabVisible = { display:"flex", flexDirection:"column", height:"100%", overflowY:"auto", WebkitOverflowScrolling:"touch" };
 const tabHidden  = { display:"none" };
@@ -138,6 +145,7 @@ export function AdminPanel({ user, onLogout }) {
             <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
             <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
             <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
+            <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
           </div>
         </div>
       ) : (
@@ -147,6 +155,7 @@ export function AdminPanel({ user, onLogout }) {
           <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
           <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
           <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
+          <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
         </div>
       )}
     </div>
