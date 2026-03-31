@@ -9,34 +9,8 @@ export function LoginScreen({ onLogin }) {
   const T = useT();
   const { lang, switchLang } = useLang();
   const [mode, setMode] = useState("login");
-  const [debugLog, setDebugLog] = useState("");
-
-  useEffect(() => {
-    // Odśwież co 500ms, aby widzieć zmiany na żywo
-    const i = setInterval(() => {
-      const root = document.getElementById("root");
-      const html = document.documentElement;
-      const metrics = [
-        `window.innerHeight: ${window.innerHeight}`,
-        `screen.height: ${window.screen.height}`,
-        `visualViewport: ${window.visualViewport?.height || "N/A"}`,
-        `body clientHeight: ${document.body.clientHeight}`,
-        `root clientHeight: ${root?.clientHeight}`,
-        `--safe-bottom: ${getComputedStyle(html).getPropertyValue("--safe-bottom")}`,
-      ].join("\\n");
-      setDebugLog(metrics);
-    }, 500);
-    return () => clearInterval(i);
-  }, []);
-
   return (
     <div className="app-container" style={{height:"100%",display:"flex",flexDirection:"column",fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",overflow:"hidden",background:C.greyBg}}>
-      
-      {/* Pływające okienko Debug */}
-      <div style={{position:"fixed", top:0, left:0, zIndex:9999, background:"rgba(0,0,0,0.8)", color:"#0f0", fontSize:10, fontFamily:"monospace", padding:8, pointerEvents:"none", whiteSpace:"pre-wrap"}}>
-        {debugLog}
-      </div>
-
       <Header/>
       <div style={{background:C.greyBanner,borderBottom:`1px solid #D0D3D6`,padding:"11px 20px",textAlign:"center"}}>
         <strong style={{display:"block",fontSize:15,color:C.black,marginBottom:2}}>ENGEL Expert Academy</strong>
@@ -115,7 +89,7 @@ export function AuthForm({ mode, setMode, onLogin }) {
 
   async function doLogin() {
     if (lockout > 0) return;
-    if (!email.trim() || !pass) { setErr("Wypełnij wszystkie pola"); return; }
+    if (!email.trim() || !pass) { setErr(T.fill_all_fields); return; }
     setLoading(true); setErr("");
     try {
       const s = await auth.signIn(email.trim().toLowerCase(), pass);
@@ -136,7 +110,7 @@ export function AuthForm({ mode, setMode, onLogin }) {
         email:       s.user.email,
       });
     } catch(e) {
-      setErr(e.message || "Błąd logowania");
+      setErr(e.message || T.login_error);
       setShake(true); setTimeout(() => setShake(false), 400);
 
       // Zwiększ licznik i zablokuj po MAX_ATTEMPTS próbach
@@ -149,13 +123,13 @@ export function AuthForm({ mode, setMode, onLogin }) {
   }
 
   async function doRegister() {
-    if (!email.trim() || !pass) { setErr("E-mail i hasło są wymagane"); return; }
-    if (pass.length < 8) { setErr("Hasło musi mieć co najmniej 8 znaków"); return; }
-    if (!email.includes("@")) { setErr("Podaj poprawny adres e-mail"); return; }
+    if (!email.trim() || !pass) { setErr(T.email_required); return; }
+    if (pass.length < 8) { setErr(T.password_min_length); return; }
+    if (!email.includes("@")) { setErr(T.email_invalid); return; }
     setLoading(true); setErr("");
     try {
       const result = await auth.signUp(email.trim().toLowerCase(), pass);
-      if (!result.user) throw new Error("Błąd tworzenia konta");
+      if (!result.user) throw new Error(T.account_create_error);
 
       const emailName = email.trim().split("@")[0];
       await db.insert(result.access_token, "profiles", {
@@ -169,14 +143,14 @@ export function AuthForm({ mode, setMode, onLogin }) {
         notif_cert: true,
       }).catch(() => {});
 
-      setInfo("Konto utworzone! Możesz się teraz zalogować.");
+      setInfo(T.account_created);
       sw("login"); setEmail(email); setPass("");
     } catch(e) {
       const msg = e.message || "";
       if (msg.includes("already registered") || msg.includes("User already registered")) {
-        setErr("Konto z tym adresem e-mail już istnieje. Zaloguj się lub zresetuj hasło.");
+        setErr(T.email_exists);
       } else {
-        setErr(msg || "Błąd rejestracji");
+        setErr(msg || T.register_error);
       }
     }
     finally { setLoading(false); }
@@ -201,7 +175,7 @@ export function AuthForm({ mode, setMode, onLogin }) {
         {mode === "login" ? (
           <>
             {/* autoComplete="email" i "current-password" pozwalają menedżerom haseł działać */}
-            <Field label={T.email_label} type="email" value={email} onChange={v => { setEmail(v); setErr(""); }} placeholder="np. jan@firma.pl" autoComplete="email"/>
+            <Field label={T.email_label} type="email" value={email} onChange={v => { setEmail(v); setErr(""); }} placeholder={T.email_placeholder} autoComplete="email"/>
             <Field label={T.password_label} type="password" value={pass} onChange={v => { setPass(v); setErr(""); }} placeholder="••••••" autoComplete="current-password"/>
 
             <label style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,cursor:"pointer",userSelect:"none"}}>
@@ -217,7 +191,7 @@ export function AuthForm({ mode, setMode, onLogin }) {
                 </svg>}
               </div>
               <span style={{fontSize:13,color:C.greyDk}} onClick={() => setRemember(r => !r)}>
-                Zapamiętaj mnie
+                {T.remember_me}
               </span>
             </label>
 
@@ -226,7 +200,7 @@ export function AuthForm({ mode, setMode, onLogin }) {
             {/* Komunikat blokady po zbyt wielu nieudanych próbach */}
             {isLocked && (
               <div style={{color:C.amber,fontSize:12,marginBottom:12,fontWeight:600}}>
-                ⚠ Zbyt wiele nieudanych prób. Poczekaj {lockout}s.
+                ⚠ {T.lockout_msg.replace("{n}", lockout)}
               </div>
             )}
 
@@ -236,19 +210,19 @@ export function AuthForm({ mode, setMode, onLogin }) {
               {isLocked ? `Zablokowano (${lockout}s)` : loading ? T.logging_in : T.login_btn}
             </button>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.greyMid}}>
-              <span>Nie masz konta? <span style={{color:C.black,fontWeight:700,cursor:"pointer",textDecoration:"underline"}} onClick={() => sw("register")}>Zarejestruj się</span></span>
-              <span style={{color:C.black,fontWeight:600,cursor:"pointer",textDecoration:"underline"}} onClick={() => setMode("recover")}>Zapomniałem hasła</span>
+              <span>{T.no_account} <span style={{color:C.black,fontWeight:700,cursor:"pointer",textDecoration:"underline"}} onClick={() => sw("register")}>{T.register}</span></span>
+              <span style={{color:C.black,fontWeight:600,cursor:"pointer",textDecoration:"underline"}} onClick={() => setMode("recover")}>{T.forgot_password}</span>
             </div>
           </>
         ) : (
           <>
             {/* autoComplete="new-password" przy rejestracji — przeglądarka zaproponuje silne hasło */}
             <Field label={T.email_label + " *"} type="email" value={email} onChange={v => { setEmail(v); setErr(""); }} placeholder="np. jan@firma.pl" autoComplete="email"/>
-            <Field label={T.password_label + " *"} type="password" value={pass} onChange={v => { setPass(v); setErr(""); }} placeholder="min. 8 znaków" autoComplete="new-password"/>
+            <Field label={T.password_label + " *"} type="password" value={pass} onChange={v => { setPass(v); setErr(""); }} placeholder={T.password_placeholder} autoComplete="new-password"/>
             {err && <div style={{color:C.red,fontSize:12,marginBottom:12}}>{err}</div>}
             <button style={{width:"100%",background:loading?C.greyDk:C.black,border:"none",color:C.white,padding:15,fontSize:15,fontWeight:600,cursor:loading?"not-allowed":"pointer",marginBottom:12}}
-              onClick={doRegister} disabled={loading}>{loading ? "Rejestracja..." : T.register}</button>
-            <div style={{textAlign:"center",fontSize:12,color:C.greyMid}}>Masz już konto? <span style={{color:C.black,fontWeight:700,cursor:"pointer",textDecoration:"underline"}} onClick={() => sw("login")}>Zaloguj się</span></div>
+              onClick={doRegister} disabled={loading}>{loading ? T.registering : T.register}</button>
+            <div style={{textAlign:"center",fontSize:12,color:C.greyMid}}>{T.have_account} <span style={{color:C.black,fontWeight:700,cursor:"pointer",textDecoration:"underline"}} onClick={() => sw("login")}>{T.login_link}</span></div>
           </>
         )}
       </div>
@@ -265,12 +239,12 @@ export function RecoverForm({ onBack }) {
   const [done,    setDone]    = useState(false);
 
   async function send() {
-    if (!email.trim() || !email.includes("@")) { setErr("Podaj poprawny adres e-mail"); return; }
+    if (!email.trim() || !email.includes("@")) { setErr(T.email_invalid); return; }
     setLoading(true); setErr("");
     try {
       await auth.recover(email.trim().toLowerCase());
       setDone(true);
-    } catch(e) { setErr(e.message || "Błąd — spróbuj ponownie"); }
+    } catch(e) { setErr(e.message || T.reset_error); }
     finally { setLoading(false); }
   }
 
@@ -278,22 +252,22 @@ export function RecoverForm({ onBack }) {
     <>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:C.greyDk,fontSize:22,padding:0}}>←</button>
-        <span style={{fontSize:16,fontWeight:700,color:C.black}}>Odzyskiwanie hasła</span>
+        <span style={{fontSize:16,fontWeight:700,color:C.black}}>{T.recover_title}</span>
       </div>
       <div style={{background:C.white,padding:24,boxShadow:"0 1px 6px rgba(0,0,0,.1)"}}>
         {done ? (
           <div style={{textAlign:"center",padding:"8px 0"}}>
             <div style={{fontSize:40,marginBottom:12}}>📧</div>
-            <div style={{fontSize:16,fontWeight:700,color:C.black,marginBottom:8}}>E-mail wysłany!</div>
-            <div style={{fontSize:13,color:C.greyDk,lineHeight:1.6,marginBottom:20}}>Sprawdź skrzynkę <strong>{email}</strong> i kliknij link do resetowania hasła.</div>
-            <button style={{width:"100%",background:C.black,border:"none",color:C.white,padding:14,fontSize:14,fontWeight:600,cursor:"pointer"}} onClick={onBack}>Wróć do logowania</button>
+            <div style={{fontSize:16,fontWeight:700,color:C.black,marginBottom:8}}>{T.email_sent_title}</div>
+            <div style={{fontSize:13,color:C.greyDk,lineHeight:1.6,marginBottom:20}}>{T.email_sent_body.replace("{email}", email)}</div>
+            <button style={{width:"100%",background:C.black,border:"none",color:C.white,padding:14,fontSize:14,fontWeight:600,cursor:"pointer"}} onClick={onBack}>{T.back_to_login}</button>
           </div>
         ) : (
           <>
             <div style={{fontSize:13,color:C.greyDk,lineHeight:1.6,marginBottom:20}}>
-              Podaj adres e-mail podany podczas rejestracji. Wyślemy link do resetowania hasła.
+              {T.recover_instruction}
             </div>
-            <Field label="E-MAIL" type="email" value={email} onChange={v => { setEmail(v); setErr(""); }} placeholder="np. jan@firma.pl" autoComplete="email"/>
+            <Field label="E-MAIL" type="email" value={email} onChange={v => { setEmail(v); setErr(""); }} placeholder={T.email_placeholder} autoComplete="email"/>
             {err && <div style={{color:C.red,fontSize:12,marginBottom:12}}>{err}</div>}
             <button style={{width:"100%",background:loading?C.greyDk:C.black,border:"none",color:C.white,padding:14,fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer"}}
               onClick={send} disabled={loading}>{loading ? T.sending : T.reset_btn}</button>

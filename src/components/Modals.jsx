@@ -35,7 +35,7 @@ export function CelebModal({ entry, onClose }) {
           <div style={{height:5,background:C.green}}/>
           <div style={{fontSize:48,textAlign:"center",padding:"24px 0 8px"}}>🏆</div>
           <div style={{textAlign:"center",fontSize:28,fontWeight:700,color:C.black}}>Gratulacje!</div>
-          <div style={{textAlign:"center",fontSize:13,color:C.greyMid,marginTop:4,marginBottom:20}}>Szkolenie zostało zaliczone</div>
+          <div style={{textAlign:"center",fontSize:13,color:C.greyMid,marginTop:4,marginBottom:20}}>{T.training_done_sub}</div>
           <div style={{margin:"0 24px 16px",background:C.greyBg,padding:"14px 16px",borderLeft:`4px solid ${C.green}`}}>
             <div style={{fontSize:15,fontWeight:700,color:C.black}}>{entry.training.title}</div>
             <div style={{fontSize:12,color:C.greyMid,marginTop:4}}>{entry.training.category} · {entry.training.duration}</div>
@@ -82,7 +82,7 @@ export function CertModal({ entry, user, onClose }) {
       });
     } catch(e) {
       logErr("Błąd generowania certyfikatu:", e);
-      addToast("Błąd generowania PDF: " + e.message);
+      addToast(T.cert_error + e.message);
     } finally {
       setGenerating(false);
     }

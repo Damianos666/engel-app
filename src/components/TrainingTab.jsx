@@ -35,6 +35,8 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
 
   // Okienko potwierdzenia — tylko dla kodów ST (uczestnik wpisuje nazwę)
   const [confirm,     setConfirm]     = useState(null);
+  const [confirmDays, setConfirmDays] = useState("");
+  const [confirmName, setConfirmName] = useState("");
 
   const progress = calcProgress(completed, activeGroups);
 
@@ -78,6 +80,7 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
     // Kod ST — pokaż prosty modal potwierdzenia (tytuł nieznany przy ręcznym wpisaniu)
     if (raw.startsWith("ST")) {
       setConfirm({ rawCode: raw, isSpecial: true });
+      setConfirmDays("1");
       return;
     }
 
@@ -100,7 +103,7 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
       // Przy ręcznym wpisaniu ST tytuł nie jest znany — Edge Function użyje "Szkolenie specjalne"
       const result = await edge.verifyCode(user.accessToken, confirm.rawCode);
       handleSuccess(result, confirm.rawCode);
-      setConfirm(null);
+      setConfirm(null); setConfirmDays("");
     } catch (e) {
       setStatus("invalid");
       setConfirm(null);
@@ -108,6 +111,14 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
       setVerifying(false);
     }
   }
+
+  function cancelConfirm() {
+    setConfirm(null);
+    setConfirmName("");
+    setConfirmDays("");
+  }
+
+  const canSubmit = !!confirm;
 
   // Modal potwierdzenia — tylko dla kodów ST wpisanych ręcznie
   const confirmModal = confirm && (
@@ -121,17 +132,17 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
         <div style={{height:3,background:C.green}}/>
         <div style={{padding:20}}>
           <div style={{background:C.greyBg,padding:"12px 14px",borderLeft:`3px solid ${C.amber}`,fontSize:13,color:C.greyDk,lineHeight:1.6}}>
-            ⭐ Szkolenie specjalne — nazwa zostanie pobrana z serwera.
+            ⭐ {T.special_training_hint}
           </div>
         </div>
         <div style={{padding:"0 20px 20px",display:"flex",gap:10}}>
           <button onClick={() => setConfirm(null)}
             style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"11px 0",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:4}}>
-            Anuluj
+            {T.cancel}
           </button>
           <button onClick={submitConfirm} disabled={verifying}
             style={{flex:2,background:C.green,border:"none",color:C.white,padding:"11px 0",fontSize:13,fontWeight:700,cursor:verifying?"not-allowed":"pointer",borderRadius:4}}>
-            {verifying ? "Weryfikuję..." : "Zatwierdź"}
+            {verifying ? T.verifying : T.confirm_btn}
           </button>
         </div>
       </div>

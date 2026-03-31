@@ -45,7 +45,7 @@ export function CatalogTab({ completed, activeGroups }) {
                     <p style={{fontSize:13,color:C.greyDk,lineHeight:1.7,margin:0}}>{t.desc}</p>
                     {done && completed.find(c => c.training.id===t.id) && (
                       <div style={{marginTop:12,background:"rgba(138,183,62,.12)",border:`1px solid ${C.green}`,padding:"8px 14px",fontSize:12,color:C.greenDk,display:"flex",justifyContent:"space-between"}}>
-                        <span>✓ Zaliczone</span>
+                        <span>{T.done_inline}</span>
                         <span style={{fontFamily:"monospace"}}>{completed.find(c => c.training.id===t.id).date}</span>
                       </div>
                     )}
