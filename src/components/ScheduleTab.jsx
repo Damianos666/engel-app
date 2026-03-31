@@ -13,7 +13,7 @@ function today() { return toISO(new Date()); }
 
 function downloadICS(s, t) {
   const isST   = s.training_id === "ST";
-  const title  = isST ? (s.custom_name || (t?.title ?? "Special training")) : t.title;
+  const title  = isST ? (s.custom_name || "Szkolenie specjalne") : t.title;
   const fileId = isST ? ("ST-" + (s.custom_name||"spec").replace(/\s+/g,"-").slice(0,20)) : t.id;
   const dateStart = s.date.replace(/-/g, "");
   const endRaw  = s.end_date || s.date;
@@ -248,12 +248,12 @@ export function ScheduleTab({ activeGroups }) {
           {selected && (
             <button onClick={() => setSelected(null)}
               style={{background:"none",border:"none",fontSize:11,color:C.greyMid,cursor:"pointer",textDecoration:"underline"}}>
-              {T.show_upcoming}
+              pokaż najbliższe
             </button>
           )}
         </div>
 
-        {loading && <div style={{textAlign:"center",padding:24,color:C.greyMid,fontSize:13}}>{T.loading}</div>}
+        {loading && <div style={{textAlign:"center",padding:24,color:C.greyMid,fontSize:13}}>Ładowanie…</div>}
 
         {!loading && displayItems.length === 0 && (
           <div style={{textAlign:"center",padding:24,color:C.greyMid,fontSize:13}}>
@@ -267,7 +267,7 @@ export function ScheduleTab({ activeGroups }) {
           if (!isST && !t) return null;
           const grp = t ? GROUPS.find(g => g.id === t.group) : null;
           const barColor = isST ? "#8E44AD" : (grp?.color || C.green);
-          const title = isST ? (s.custom_name || T.special_training_name) : t.title;
+          const title = isST ? (s.custom_name || "Szkolenie specjalne") : t.title;
           const date = new Date(s.date + "T00:00:00");
 
           return (

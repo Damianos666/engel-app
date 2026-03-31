@@ -131,6 +131,8 @@ function AppRoot({ onMounted }) {
   const [tab,               setTab]             = useState(0);
   const [completed,         setCompleted]       = useState([]);
   const [activeGroups,      setActiveGroups]    = useState(["tech","ur","maszyny"]);
+  const [notifReminder,     setNotifReminder]   = useState(true);
+  const [notifCert,         setNotifCert]       = useState(true);
   const [dataLoading,       setDataLoading]     = useState(false);
   const [msgCount,          setMsgCount]        = useState(0);
   const [readIds,           setReadIds]         = useState(new Set());
@@ -140,6 +142,17 @@ function AppRoot({ onMounted }) {
   const [trainingOverrides, setTrainingOverrides] = useState({});
   const [gameData,          setGameData]         = useState({ points: 0, streak_current: 0 });
   const [gramRefreshKey,    setGramRefreshKey]   = useState(0);
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
+  const prevTabRef = useRef(null);
+
+  // Odświeża Terminarz klienta gdy użytkownik wchodzi na tab 2
+  const handleSetTab = useCallback((newTab) => {
+    if (newTab === 2 && prevTabRef.current !== 2) {
+      setScheduleRefreshKey(k => k + 1);
+    }
+    prevTabRef.current = newTab;
+    setTab(newTab);
+  }, []);
 
   const lastMsgAt       = useRef(null);
   const realtimeUnsub   = useRef(null);
@@ -343,6 +356,8 @@ function AppRoot({ onMounted }) {
       setUserRaw(u);
       if (Array.isArray(u.active_groups) && u.active_groups.length)
         setActiveGroups(u.active_groups);
+      setNotifReminder(u.notif_reminder);
+      setNotifCert(u.notif_cert);
       setTrainerViewRaw(u.trainer_view || "client");
 
       log("[LOGIN] completions loaded:", comps.length);
@@ -404,7 +419,7 @@ function AppRoot({ onMounted }) {
     if (realtimeUnsub.current) { realtimeUnsub.current(); realtimeUnsub.current = null; }
     setUserRaw(null); setCompleted([]); setTab(0); setMsgCount(0);
     setTrainerViewRaw("client"); setTrainingOverrides({});
-    setActiveGroups(["tech","ur","maszyny"]);
+    setActiveGroups(["tech","ur","maszyny"]); setNotifReminder(true); setNotifCert(true);
   }, [user]);
 
   const refreshGameData = useCallback(async () => {
@@ -473,7 +488,7 @@ function AppRoot({ onMounted }) {
         />
       ) : (
         <ClientView
-          tab={tab} setTab={setTab}
+          tab={tab} setTab={handleSetTab}
           completed={completed}
           activeGroups={activeGroups}
           setActiveGroups={setActiveGroups}
@@ -489,6 +504,7 @@ function AppRoot({ onMounted }) {
           gameData={gameData}
           onTipConfirmed={refreshGameData}
           gramRefreshKey={gramRefreshKey}
+          scheduleRefreshKey={scheduleRefreshKey}
           readIds={readIds}
           onMarkRead={handleMarkRead}
           msgRefreshKey={msgRefreshKey}
@@ -551,7 +567,7 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
 }
 
 /* ─── WIDOK KLIENTA ──────────────────────────────────────────────────────── */
-function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed, gramRefreshKey, readIds, onMarkRead, msgRefreshKey }) {
+function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed, gramRefreshKey, scheduleRefreshKey, readIds, onMarkRead, msgRefreshKey }) {
   const { user } = useUser();
   const [showGram, setShowGram] = useState(false);
 
@@ -586,7 +602,7 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
           <CatalogTab completed={completed} activeGroups={activeGroups}/>
         </div>
         <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
-          <ScheduleTab activeGroups={activeGroups} trainerNum={user.trainer_id}/>
+          <ScheduleTab key={scheduleRefreshKey} activeGroups={activeGroups} trainerNum={user.trainer_id}/>
         </div>
         <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
           <MessagesTab onTipConfirmed={onTipConfirmed} readIds={readIds} onMarkRead={onMarkRead} msgRefreshKey={msgRefreshKey}/>

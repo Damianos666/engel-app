@@ -17,7 +17,6 @@ const toISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
 /* ─── TipBanner — Tip dnia na górze zakładki Wiadomości ─────────────────── */
 function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, currentDate }) {
-  const T = useT();
   const [tipQ,       setTipQ]       = useState(null);
   const [confirmed,  setConfirmed]  = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -69,7 +68,7 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
       setTipModal({ totalPoints: res.total_points, streak: res.streak });
       setConfirmed(true);
     } catch (e) {
-      alert(T.save_error + e.message);
+      alert("Błąd zapisu: " + e.message);
     } finally {
       setConfirming(false);
     }
@@ -93,10 +92,10 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
       <span style={{ fontSize: 18 }}>{devDateStr ? "🛠" : "✅"}</span>
       <div>
         <div style={{ fontSize: 12, fontWeight: 700, color: devDateStr ? "#E67E22" : C.greenDk }}>
-          {T.tip_read}
+          Tip dnia przeczytany
         </div>
         <div style={{ fontSize: 11, color: devDateStr ? "#E67E22" : C.greenDk }}>
-          {T.tip_return}
+          Wróć jutro po kolejne 10 pkt
         </div>
       </div>
     </div>
@@ -108,7 +107,7 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
       {/* Nagłówek */}
       <div style={{ background: "#262624", padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: "0.5px solid rgba(0,0,0,0.15)" }}>
         <span style={{ fontSize: 14 }}>💡</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#A0A0A0", letterSpacing: .5 }}>{T.tip_header}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#A0A0A0", letterSpacing: .5 }}>TIP DNIA</span>
         <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#6E9430", background: "#EAF3DE", padding: "2px 8px", borderRadius: 4 }}>⭐ +{TIP_POINTS} pkt</span>
       </div>
       {/* Treść */}
@@ -117,14 +116,14 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
           {tipQ.question}
         </div>
         <div style={{ background: "#1A1A1A", border: "1px solid #8AB73E", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: "#8AB73E", fontWeight: 700, letterSpacing: .5, marginBottom: 4 }}>{T.tip_answer}</div>
+          <div style={{ fontSize: 10, color: "#8AB73E", fontWeight: 700, letterSpacing: .5, marginBottom: 4 }}>ODPOWIEDŹ</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.4 }}>{correctAnswer}</div>
         </div>
         <button
           onClick={handleConfirm}
           disabled={confirming}
           style={{ width: "100%", padding: "11px", background: confirming ? "#8AB73E" : "#639922", border: "none", borderRadius: 8, color: "#FFFFFF", fontSize: 13, fontWeight: 700, cursor: confirming ? "not-allowed" : "pointer", boxSizing: "border-box", transition: "background .2s" }}>
-          {confirming ? T.confirming_tip : T.confirm_tip}
+          {confirming ? "Zapisuję..." : "✓ Potwierdzam"}
         </button>
       </div>
     </div>
@@ -133,7 +132,6 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
 
 /* ─── WeeklyQuizBanner — pojawia się w 7. dniu w Wiadomościach ──────────── */
 function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDevQuizDone, currentDate }) {
-  const T = useT();
   const [quizDone,    setQuizDone]    = useState(false);
   const [questions,   setQuestions]   = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -192,7 +190,7 @@ function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDev
       setQuizDone(true);
       if (onConfirmed) onConfirmed();
     } catch (e) {
-      alert(T.save_error + e.message);
+      alert("Błąd zapisu: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -215,15 +213,15 @@ if (result) return (
     <div style={{ margin: "8px 12px 0", background: "#EAF3DE", border: `1px solid #8AB73E`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
       <span style={{ fontSize: 18 }}>✅</span>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#27500A" }}>{T.quiz_weekly_done}</div>
-        <div style={{ fontSize: 11, color: "#3B6D11" }}>{T.quiz_return}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#27500A" }}>Quiz tygodniowy ukończony</div>
+        <div style={{ fontSize: 11, color: "#3B6D11" }}>Wróć za tydzień po kolejne punkty</div>
       </div>
     </div>
   );
 
   if (saving) return (
     <div style={{ margin: "8px 12px 0", padding: "12px 16px", textAlign: "center", fontSize: 12, color: "#A0A0A0" }}>
-      {T.saving_result}
+      Zapisuję wynik...
     </div>
   );
 
@@ -233,17 +231,17 @@ if (result) return (
       <div style={{ margin: "8px 12px 0", borderRadius: 12, overflow: "hidden", border: "0.5px solid rgba(0,0,0,0.15)", boxShadow: "0 4px 12px rgba(0,0,0,0.12)" }}>
         <div style={{ background: "#262624", padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: "0.5px solid rgba(0,0,0,0.15)" }}>
           <span style={{ fontSize: 14 }}>📝</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#A0A0A0", letterSpacing: .5 }}>{T.quiz_weekly_label}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#A0A0A0", letterSpacing: .5 }}>QUIZ TYGODNIOWY</span>
           <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#6E9430", background: "#EAF3DE", padding: "2px 8px", borderRadius: 4 }}>do 60 pkt</span>
         </div>
         <div style={{ background: "#30302E", padding: "14px 16px" }}>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,.65)", marginBottom: 12, lineHeight: 1.5 }}>
-            {T.quiz_summary.replace("{n}", questions.length)}
+            Czas na podsumowanie tygodnia! {questions.length} pytań z tipów które poznałeś przez ostatnie 7 dni.
           </div>
           <button
             onClick={() => setShowQuiz(true)}
             style={{ width: "100%", padding: "11px", background: "#639922", border: "none", borderRadius: 8, color: "#FFFFFF", fontSize: 13, fontWeight: 700, cursor: "pointer", boxSizing: "border-box" }}>
-            {T.quiz_start}
+            ▶ Rozpocznij quiz
           </button>
         </div>
       </div>
@@ -341,7 +339,7 @@ function DevPanel({ token, userId, onDevDate, seenDates, devQuizDone, onReset, o
 
       {open && (
         <div style={{ background: "#1A1A1A", border: "1.5px dashed #555", borderTop: "none", borderRadius: "0 0 8px 8px", padding: "14px 14px 16px" }}>
-          {loading && <div style={{ color: "#888", fontSize: 12, textAlign: "center", padding: 12 }}>{T.loading_data}</div>}
+          {loading && <div style={{ color: "#888", fontSize: 12, textAlign: "center", padding: 12 }}>Ładowanie danych...</div>}
 
           {!loading && !programStart && (
             <div style={{ color: "#E67E22", fontSize: 12, padding: "8px 0" }}>
@@ -435,7 +433,7 @@ function DevPanel({ token, userId, onDevDate, seenDates, devQuizDone, onReset, o
                     );
                   })}
                   {cycleQs.length === 0 && (
-                    <div style={{ color: "#555", fontSize: 12, textAlign: "center", padding: 8 }}>{T.no_questions}</div>
+                    <div style={{ color: "#555", fontSize: 12, textAlign: "center", padding: 8 }}>Brak pytań w puli</div>
                   )}
                   {/* Wiersz quizu */}
                   {cycleQs.length > 0 && (
@@ -649,8 +647,8 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
   useEffect(() => { if (msgRefreshKey > 0) loadMessages(); }, [msgRefreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function sendMessage() {
-    if (!fTitle.trim()) { setFormErr(T.title_required); return; }
-    if (!fBody.trim())  { setFormErr(T.body_required); return; }
+    if (!fTitle.trim()) { setFormErr("Tytuł jest wymagany"); return; }
+    if (!fBody.trim())  { setFormErr("Treść jest wymagana"); return; }
     setSaving(true); setFormErr("");
     try {
       await db.insert(token, "messages", {
@@ -662,7 +660,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
       setFTitle(""); setFBody(""); setFType("info"); setFPinned(false);
       setShowForm(false);
       await loadMessages();
-    } catch(e) { setFormErr(T.send_error + e.message); }
+    } catch(e) { setFormErr("Błąd wysyłania: " + e.message); }
     finally { setSaving(false); }
   }
 
@@ -671,7 +669,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
     try {
       await db.remove(token, "messages", `id=eq.${id}`);
       setMessages(p => p.filter(m => m.id !== id));
-    } catch(e) { alert(T.delete_error + e.message); }
+    } catch(e) { alert("Błąd usuwania: " + e.message); }
     finally { setDeleting(null); }
   }
 
@@ -735,7 +733,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
             <button
               style={{background:showForm?"none":C.black,border:`1px solid ${showForm?C.grey:C.black}`,color:showForm?C.greyDk:C.white,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}
               onClick={() => { setShowForm(p => !p); setFormErr(""); }}>
-              {showForm ? T.cancel : T.new_message}
+              {showForm ? "Anuluj" : "+ Nowa wiadomość"}
             </button>
           </div>
 
@@ -754,7 +752,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:C.greyDk,marginBottom:5,letterSpacing:.5}}>TREŚĆ *</label>
                 <textarea
                   style={{width:"100%",border:`1.5px solid ${C.grey}`,padding:"9px 12px",fontSize:13,color:C.black,outline:"none",boxSizing:"border-box",minHeight:90,resize:"vertical",fontFamily:"inherit"}}
-                  value={fBody} onChange={e => setFBody(e.target.value)} placeholder={T.message_body_ph}/>
+                  value={fBody} onChange={e => setFBody(e.target.value)} placeholder="Treść wiadomości..."/>
               </div>
 
               {/* Typ */}
@@ -798,7 +796,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
               <button
                 style={{background:saving?C.greyDk:C.black,border:"none",color:C.white,padding:"12px",fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer"}}
                 onClick={sendMessage} disabled={saving}>
-                {saving ? T.sending_msg : T.send_message}
+                {saving ? "Wysyłanie..." : "Wyślij wiadomość"}
               </button>
             </div>
           )}
@@ -809,7 +807,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
       {!messages.length && !err && (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60%",padding:32,textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:16}}>📭</div>
-          <div style={{fontSize:16,fontWeight:600,color:C.black,marginBottom:8}}>{T.no_messages}</div>
+          <div style={{fontSize:16,fontWeight:600,color:C.black,marginBottom:8}}>Brak wiadomości</div>
           <div style={{fontSize:13,color:C.greyMid}}>Nowe ogłoszenia pojawią się tutaj.</div>
         </div>
       )}
@@ -865,7 +863,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
                       </span>
                       {isAdmin && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); if(window.confirm(T.delete_msg_confirm)) deleteMessage(m.id); }}
+                          onClick={(e) => { e.stopPropagation(); if(window.confirm("Usunąć tę wiadomość?")) deleteMessage(m.id); }}
                           disabled={deleting===m.id}
                           style={{background:"none",border:`1px solid ${C.red}`,color:C.red,padding:"2px 7px",fontSize:10,fontWeight:600,cursor:"pointer",borderRadius:4}}>
                           {deleting===m.id ? "..." : T.delete}

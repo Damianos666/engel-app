@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
           name: 'ENGEL Expert Academy',
           short_name: 'Expert Academy',
           description: 'Aplikacja szkoleń ENGEL Expert Academy',
-          theme_color: '#F6F7F9',
+          theme_color: '#2C2C2C',
           background_color: '#EFEFEF',
           display: 'standalone',
           orientation: 'portrait',
