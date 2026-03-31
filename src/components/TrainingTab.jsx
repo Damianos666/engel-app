@@ -132,17 +132,17 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
         <div style={{height:3,background:C.green}}/>
         <div style={{padding:20}}>
           <div style={{background:C.greyBg,padding:"12px 14px",borderLeft:`3px solid ${C.amber}`,fontSize:13,color:C.greyDk,lineHeight:1.6}}>
-            ⭐ Szkolenie specjalne — nazwa zostanie pobrana z serwera.
+            ⭐ {T.special_training_hint}
           </div>
         </div>
         <div style={{padding:"0 20px 20px",display:"flex",gap:10}}>
           <button onClick={() => setConfirm(null)}
             style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"11px 0",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:4}}>
-            Anuluj
+            {T.cancel}
           </button>
           <button onClick={submitConfirm} disabled={verifying}
             style={{flex:2,background:C.green,border:"none",color:C.white,padding:"11px 0",fontSize:13,fontWeight:700,cursor:verifying?"not-allowed":"pointer",borderRadius:4}}>
-            {verifying ? "Weryfikuję..." : "Zatwierdź"}
+            {verifying ? T.verifying : T.confirm_btn}
           </button>
         </div>
       </div>

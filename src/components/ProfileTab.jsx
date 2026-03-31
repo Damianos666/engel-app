@@ -86,10 +86,10 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
             </div>
           ))}
           {saveErr && <div style={{color:C.red,fontSize:12,marginBottom:12}}>{saveErr}</div>}
-          <div style={{fontSize:11,color:C.greyMid,marginBottom:16}}>Widoczne w aplikacji i na certyfikatach. E-mail pozostaje bez zmian.</div>
+          <div style={{fontSize:11,color:C.greyMid,marginBottom:16}}>{T.profile_note}</div>
           <div style={{display:"flex",gap:8}}>
             <button style={{flex:1,background:saving?C.greyDk:C.black,border:"none",color:C.white,padding:12,fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer"}} onClick={saveProfile} disabled={saving}>{saving?T.saving:T.save}</button>
-            <button style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:12,fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={() => { setEditing(false); setEditName(user.displayName); setEditStanowisko(user.stanowisko||""); setEditFirma(user.firma||""); setSaveErr(""); }}>Anuluj</button>
+            <button style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:12,fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={() => { setEditing(false); setEditName(user.displayName); setEditStanowisko(user.stanowisko||""); setEditFirma(user.firma||""); setSaveErr(""); }}>{T.cancel}</button>
           </div>
         </div>
       )}
@@ -106,7 +106,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700,color:C.black}}>Virtual Expert Academy</div>
-              <div style={{fontSize:11,color:C.greyMid,marginTop:2}}>Punkty · Ranking · Certyfikat</div>
+              <div style={{fontSize:11,color:C.greyMid,marginTop:2}}>{T.points_ranking}</div>
             </div>
             <span style={{fontSize:20,color:C.greyMid}}>›</span>
           </button>
@@ -135,11 +135,11 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
             {activeGroups.length > 0 && (
               <div style={{padding:"12px 18px",background:C.greyBg,borderTop:`1px solid ${C.grey}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                  <span style={{fontSize:12,color:C.greyDk}}>Łączny postęp</span>
+                  <span style={{fontSize:12,color:C.greyDk}}>{T.overall_progress}</span>
                   <span style={{fontSize:16,fontWeight:700,color:C.green}}>{progress.pct}%</span>
                 </div>
                 <div style={{height:4,background:C.grey}}><div style={{height:"100%",background:C.green,width:`${progress.pct}%`,transition:"width .5s"}}/></div>
-                <div style={{fontSize:11,color:C.greyMid,marginTop:4}}>{progress.done} / {progress.total} szkoleń zaliczonych</div>
+                <div style={{fontSize:11,color:C.greyMid,marginTop:4}}>{progress.done} / {progress.total} {T.trainings_done}</div>
               </div>
             )}
           </>}
@@ -152,7 +152,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
                   <span style={{fontSize:14,fontWeight:trainerView==="client"?700:400,color:trainerView==="client"?C.black:C.greyMid}}>Panel Klienta</span>
                 </div>
                 <div style={{fontSize:11,color:C.greyMid,paddingLeft:20}}>
-                  {trainerView==="client" ? "Widok aktywny" : "Widok trenera aktywny"}
+                  {trainerView==="client" ? T.view_active : T.trainer_view_active}
                 </div>
               </div>
               <Toggle value={trainerView==="client"} color={C.green} onChange={() => setTrainerView && setTrainerView(trainerView==="client" ? "trainer" : "client")}/>
@@ -174,11 +174,11 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
 
         {/* Informacja o bezpieczeństwie */}
         <div style={{background:C.white,padding:"14px 18px",borderTop:`3px solid ${C.green}`}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:8,textTransform:"uppercase"}}>Bezpieczeństwo konta</div>
-          <div style={{fontSize:12,color:C.greyMid,lineHeight:1.6,marginBottom:4}}>Twoje hasło jest szyfrowane przez Supabase Auth. Aby zmienić hasło, wyloguj się i użyj opcji "Zapomniałem hasła".</div>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:8,textTransform:"uppercase"}}>{T.account_security}</div>
+          <div style={{fontSize:12,color:C.greyMid,lineHeight:1.6,marginBottom:4}}>{T.security_note}</div>
         </div>
 
-        <button style={{background:C.black,border:"none",color:C.white,padding:16,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:8}} onClick={onLogout}>Wyloguj się</button>
+        <button style={{background:C.black,border:"none",color:C.white,padding:16,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:8}} onClick={onLogout}>{T.logout}</button>
       </div>
     </div>
     {showGram && <GramTab onClose={() => setShowGram(false)}/>}

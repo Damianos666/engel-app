@@ -3,6 +3,7 @@ import { C, GROUPS, TRAINERS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
 import { useUser } from "../lib/UserContext";
+import { useT } from "../lib/LangContext";
 import { fetchHolidaysForYear } from "../lib/holidays";
 import {
   TIMELINE_TRAINERS as ALL_TRAINERS,
@@ -18,8 +19,6 @@ import {
   LS_ACTIVE_TRAINERS_KEY as LS_KEY,
 } from "../config/configApp";
 
-const MONTHS_PL = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec",
-                   "Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
 
 const EPOCH = new Date("2020-01-01T12:00:00");
 
@@ -53,6 +52,7 @@ function loadActiveTrainers(trainerNum) {
 
 export function TrainerScheduleTab({ trainerNum }) {
   const { token } = useUser();
+  const T         = useT();
   const now       = new Date();
   const todayISO  = toISO(now);
 
@@ -275,12 +275,12 @@ export function TrainerScheduleTab({ trainerNum }) {
 
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"8px 10px",borderBottom:`1px solid ${C.grey}`}}>
           <span style={{fontSize:13,fontWeight:700,color:C.black}}>
-            {MONTHS_PL[visibleLabel.month]} {visibleLabel.year}
+            {T.months[visibleLabel.month]} {visibleLabel.year}
           </span>
         </div>
 
         {loading ? (
-          <div style={{padding:20,textAlign:"center",color:C.greyMid,fontSize:12}}>Ładowanie…</div>
+          <div style={{padding:20,textAlign:"center",color:C.greyMid,fontSize:12}}>{T.loading}</div>
         ) : (
           <div ref={timelineRef} onScroll={onScroll} style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <div style={{display:"inline-block",minWidth:"100%",verticalAlign:"top"}}>
@@ -293,7 +293,7 @@ export function TrainerScheduleTab({ trainerNum }) {
                     return (
                       <div key={`${mon.year}-${mon.month}`} style={{display:"flex",position:"relative",borderLeft: mi > 0 ? `2px solid ${C.grey}` : "none"}}>
                         <div style={{position:"absolute",top:1,left:3,fontSize:7,fontWeight:700,color:C.green,letterSpacing:.3,pointerEvents:"none",lineHeight:"9px"}}>
-                          {MONTHS_PL[mon.month].slice(0,3).toUpperCase()}
+                          {T.months[mon.month].slice(0,3).toUpperCase()}
                         </div>
                         {Array.from({length:days},(_,i)=>i+1).map(d=>{
                           const iso     = `${mon.year}-${pad(mon.month+1)}-${pad(d)}`;
@@ -355,7 +355,7 @@ export function TrainerScheduleTab({ trainerNum }) {
       </div>
 
       <div style={{background:C.white,margin:"8px 12px 0",borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,.07)",padding:"10px 12px"}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Widok trenerów</div>
+        <div style={{fontSize:10,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>{T.trainer_view_label}</div>
         <div style={{display:"flex",gap:6}}>
           {ALL_TRAINERS.map(n=>{
             const active = activeTrainers.includes(n);
@@ -370,7 +370,7 @@ export function TrainerScheduleTab({ trainerNum }) {
       </div>
 
       <div style={{margin:"8px 12px 12px",background:C.white,borderRadius:8,padding:14,boxShadow:"0 1px 3px rgba(0,0,0,.07)"}}>
-        <div style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Nadchodzące</div>
+        <div style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>{T.upcoming_label}</div>
         {scheduled
           .filter(s=>(s.end_date||s.date)>=todayISO&&(activeTrainers.length===0||activeTrainers.includes(Number(s.trainer_id))))
           .slice(0,20)
@@ -415,13 +415,13 @@ export function TrainerScheduleTab({ trainerNum }) {
               {notesModal.trainer&&<span>· T{notesModal.trainer} {TRAINERS[notesModal.trainer]}</span>}
               {notesModal.participants!=null&&<span>· 👥 {notesModal.participants}</span>}
             </div>
-            <div style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Notatki</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{T.notes_label}</div>
             <div style={{fontSize:13,color:notesModal.notes?C.black:C.greyMid,lineHeight:1.6,minHeight:60,whiteSpace:"pre-wrap"}}>
-              {notesModal.notes||"Brak notatek"}
+              {notesModal.notes||T.no_notes}
             </div>
             <button onClick={()=>setNotesModal(null)}
               style={{width:"100%",marginTop:16,background:C.black,color:C.white,border:"none",padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
-              Zamknij
+              {T.close}
             </button>
           </div>
         </div>
