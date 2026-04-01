@@ -11,10 +11,19 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function fmtDate(iso) {
-  if (!iso) return "";
-  const [y,m,d] = iso.split("-");
-  return `${d}.${m}.${y}`;
+function fmtDate(raw) {
+  if (!raw) return "";
+  // Już sformatowana DD.MM.YYYY
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) return raw;
+  // ISO z timestampem: 2026-03-11T00:00:00... → bierzemy tylko datę
+  const dateOnly = raw.split("T")[0];
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    const [y,m,d] = dateOnly.split("-");
+    return `${d}.${m}.${y}`;
+  }
+  // fallback — zwróć jak jest
+  return raw;
 }
 
 /* Generuje klucz zaliczenia analogiczny do systemu kodów — XXXDDDMMYYYYTN */
