@@ -19,9 +19,19 @@ function fmtDate(iso) {
 
 /* Generuje klucz zaliczenia analogiczny do systemu kodów — XXXDDDMMYYYYTN */
 function syntheticKey(trainingId, date, trainerNum) {
-  const short = (TRAININGS.find(t => t.id === trainingId)?.short || trainingId).toUpperCase();
+  const short = trainingId === "ST"
+    ? "ST"
+    : (TRAININGS.find(t => t.id === trainingId)?.short || trainingId).toUpperCase();
   const [y,m,d] = (date || today()).split("-");
   return `${short}${d}${m}${y}T${trainerNum || 1}`;
+}
+
+/* Generuje unikalny training_id dla ST żeby user mógł mieć wiele różnych ST */
+function stTrainingId(name) {
+  return "ST_" + name.trim().toLowerCase()
+    .replace(/ą/g,"a").replace(/ć/g,"c").replace(/ę/g,"e").replace(/ł/g,"l")
+    .replace(/ń/g,"n").replace(/ó/g,"o").replace(/ś/g,"s").replace(/[źż]/g,"z")
+    .replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_").slice(0, 40);
 }
 
 /* ─── StatusBadge ──────────────────────────────────────────────────────────── */
@@ -58,10 +68,13 @@ export function AdminBatchComplete({ token }) {
   const [loadingComps, setLoadingComps] = useState(false);
 
   /* — formularz zaliczenia — */
+  const [trainingMode, setTrainingMode] = useState("normal"); // "normal" | "ST"
   const [selGroup,     setSelGroup]     = useState(GROUPS[0].id);
   const [selTraining,  setSelTraining]  = useState(TRAININGS.find(t => t.group === GROUPS[0].id)?.id || "");
   const [selDate,      setSelDate]      = useState(today());
   const [selTrainer,   setSelTrainer]   = useState(1);
+  const [stName,       setStName]       = useState(""); // nazwa szkolenia specjalnego
+  const [stDays,       setStDays]       = useState(1);  // czas trwania ST
 
   /* — batch queue — */
   const [queue,        setQueue]        = useState([]);       // { id, userId, training, date, trainerNum, trainerName, status }
@@ -170,8 +183,25 @@ export function AdminBatchComplete({ token }) {
   /* ── Dodaj do kolejki ────────────────────────────────────────────────────── */
   function addToQueue() {
     if (!selUser) return;
-    const training = TRAININGS.find(t => t.id === selTraining);
-    if (!training) return;
+
+    let training;
+    if (trainingMode === "ST") {
+      if (!stName.trim()) { addToast("⚠ Wpisz nazwę szkolenia specjalnego"); return; }
+      const tid = stTrainingId(stName);
+      training = {
+        id:       tid,
+        short:    "ST",
+        title:    stName.trim(),
+        group:    "tech",
+        category: "specjalne",
+        duration: stDays === 1 ? "1 dzień" : `${stDays} dni`,
+        level:    1,
+        isSpecial: true,
+      };
+    } else {
+      training = TRAININGS.find(t => t.id === selTraining);
+      if (!training) return;
+    }
 
     // Duplikat w kolejce?
     if (queue.some(q => q.userId === selUser.id && q.training.id === training.id)) {
@@ -191,6 +221,9 @@ export function AdminBatchComplete({ token }) {
       trainerName: TRAINERS[selTrainer] || `T${selTrainer}`,
       status:      alreadyDone ? "already" : null,
     }]);
+
+    // Wyczyść nazwę ST po dodaniu
+    if (trainingMode === "ST") setStName("");
   }
 
   function removeFromQueue(id) {
@@ -373,39 +406,84 @@ export function AdminBatchComplete({ token }) {
             2. Wybierz szkolenie, datę i trenera
           </div>
 
-          {/* Grupy */}
+          {/* Tryb: normalne / specjalne */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Grupa</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Rodzaj</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {GROUPS.map(g => (
-                <button key={g.id} onClick={() => setSelGroup(g.id)}
+                <button key={g.id}
+                  onClick={() => { setTrainingMode("normal"); setSelGroup(g.id); }}
                   style={{
                     padding: "7px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 20,
                     border: `1.5px solid ${g.color}`,
-                    background: selGroup === g.id ? g.color : "transparent",
-                    color: selGroup === g.id ? C.white : g.color,
+                    background: trainingMode === "normal" && selGroup === g.id ? g.color : "transparent",
+                    color: trainingMode === "normal" && selGroup === g.id ? C.white : g.color,
                   }}>
                   {g.label}
                 </button>
               ))}
+              <button
+                onClick={() => setTrainingMode("ST")}
+                style={{
+                  padding: "7px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 20,
+                  border: "1.5px solid #8E44AD",
+                  background: trainingMode === "ST" ? "#8E44AD" : "transparent",
+                  color: trainingMode === "ST" ? C.white : "#8E44AD",
+                }}>
+                ⭐ Specjalne (ST)
+              </button>
             </div>
           </div>
 
-          {/* Szkolenie */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Szkolenie</div>
-            <select value={selTraining} onChange={e => setSelTraining(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px", border: `1.5px solid ${C.grey}`, borderRadius: 6, fontSize: 13, color: C.black, background: C.white, boxSizing: "border-box" }}>
-              {groupTrainings.map(t => {
-                const done = userComps.some(c => c.training_id === t.id);
-                return (
-                  <option key={t.id} value={t.id}>
-                    {done ? "✓ " : ""}{t.short} — {t.title} ({t.duration}){done ? " [już zaliczone]" : ""}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          {/* Szkolenie normalne */}
+          {trainingMode === "normal" && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6, textTransform: "uppercase", letterSpacing: .5 }}>Szkolenie</div>
+              <select value={selTraining} onChange={e => setSelTraining(e.target.value)}
+                style={{ width: "100%", padding: "10px 12px", border: `1.5px solid ${C.grey}`, borderRadius: 6, fontSize: 13, color: C.black, background: C.white, boxSizing: "border-box" }}>
+                {groupTrainings.map(t => {
+                  const done = userComps.some(c => c.training_id === t.id);
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {done ? "✓ " : ""}{t.short} — {t.title} ({t.duration}){done ? " [już zaliczone]" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
+          {/* Szkolenie specjalne */}
+          {trainingMode === "ST" && (
+            <div style={{ marginBottom: 12, background: "#F9F0FF", border: "1px solid rgba(142,68,173,.25)", borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8E44AD", marginBottom: 10, letterSpacing: .5 }}>⭐ SZKOLENIE SPECJALNE</div>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6 }}>NAZWA SZKOLENIA *</div>
+                <input
+                  value={stName}
+                  onChange={e => setStName(e.target.value)}
+                  placeholder="np. Szkolenie aplikacyjne — Hot Runner"
+                  style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #8E44AD", borderRadius: 6, fontSize: 13, color: C.black, background: C.white, boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 6 }}>CZAS TRWANIA</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[1,2,3,4,5].map(d => (
+                    <button key={d} onClick={() => setStDays(d)}
+                      style={{
+                        flex: 1, padding: "8px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", borderRadius: 6,
+                        border: `1.5px solid ${stDays === d ? "#8E44AD" : C.grey}`,
+                        background: stDays === d ? "#8E44AD" : C.white,
+                        color: stDays === d ? C.white : C.greyDk,
+                      }}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Data + Trener w jednym rzędzie */}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
@@ -427,11 +505,14 @@ export function AdminBatchComplete({ token }) {
           </div>
 
           {/* Podgląd certyfikatu */}
-          {selTraining && selDate && (
+          {(trainingMode === "normal" ? selTraining : stName.trim()) && selDate && (
             <div style={{ background: C.greyBg, borderRadius: 6, padding: "8px 12px", marginBottom: 14, fontSize: 11, color: C.greyDk }}>
               <span style={{ fontWeight: 700, color: C.black }}>Klucz certyfikatu: </span>
               <code style={{ background: C.white, padding: "2px 6px", borderRadius: 4, fontFamily: "monospace", fontSize: 12, color: C.greenDk }}>
-                {syntheticKey(selTraining, selDate, selTrainer)}
+                {trainingMode === "ST"
+                  ? syntheticKey("ST", selDate, selTrainer)
+                  : syntheticKey(selTraining, selDate, selTrainer)
+                }
               </code>
             </div>
           )}
