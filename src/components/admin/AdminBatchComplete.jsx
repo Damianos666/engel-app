@@ -79,10 +79,10 @@ export function AdminBatchComplete({ token }) {
     if (trimmed.length < 2) { setUsers([]); setSearchDone(false); return; }
     setSearching(true);
     try {
-      // Szukamy po nazwie, emailu, firmie — Supabase REST ilike
+      // profiles nie ma kolumny email — szukamy po name, login (= część emaila) i firma
       const enc = encodeURIComponent(`%${trimmed}%`);
       const data = await db.get(token, "profiles",
-        `or=(name.ilike.${enc},email.ilike.${enc},firma.ilike.${enc})&select=id,name,email,firma,stanowisko&limit=30&order=name.asc`
+        `or=(name.ilike.${enc},login.ilike.${enc},firma.ilike.${enc})&select=id,name,login,firma,stanowisko,role,trainer_id&limit=30&order=name.asc`
       );
       setUsers(Array.isArray(data) ? data : []);
     } catch(e) {
@@ -105,7 +105,7 @@ export function AdminBatchComplete({ token }) {
   async function selectUser(u) {
     setSelUser(u);
     setUsers([]);
-    setQuery(u.name || u.email || "");
+    setQuery(u.name || u.login || "");
     setSearchDone(false);
     setLoadingComps(true);
     try {
@@ -141,7 +141,7 @@ export function AdminBatchComplete({ token }) {
     setQueue(prev => [...prev, {
       id:          `${selUser.id}_${training.id}_${Date.now()}`,
       userId:      selUser.id,
-      userName:    selUser.name || selUser.email,
+      userName:    selUser.name || selUser.login || selUser.id,
       training,
       date:        selDate,
       trainerNum:  selTrainer,
@@ -207,7 +207,7 @@ export function AdminBatchComplete({ token }) {
           👤 Zalicz szkolenie uczestnikowi
         </div>
         <div style={{ fontSize: 12, color: C.greyMid, lineHeight: 1.5 }}>
-          Wyszukaj uczestnika, wybierz szkolenie, datę i trenera — system doda zaliczenie i odblokuje certyfikat.
+          Wyszukaj uczestnika po imieniu, nazwisku, loginie (część e-mail przed @) lub firmie. Wybierz szkolenie, datę i trenera — system doda zaliczenie i odblokuje certyfikat.
         </div>
       </div>
 
@@ -226,9 +226,10 @@ export function AdminBatchComplete({ token }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>{selUser.name || "—"}</div>
               <div style={{ fontSize: 11, color: C.greyDk }}>
-                {selUser.email}
+                {selUser.login && <span style={{ fontFamily: "monospace", fontSize: 12 }}>{selUser.login}</span>}
                 {selUser.firma && <span style={{ marginLeft: 8, opacity: .7 }}>· {selUser.firma}</span>}
                 {selUser.stanowisko && <span style={{ marginLeft: 8, opacity: .7 }}>· {selUser.stanowisko}</span>}
+                {selUser.trainer_id && <span style={{ marginLeft: 8, color: C.green, fontWeight: 700 }}>· 🎓 Trener T{selUser.trainer_id}</span>}
               </div>
               {loadingComps ? (
                 <div style={{ fontSize: 10, color: C.greyMid, marginTop: 4 }}>Ładowanie zaliczonych…</div>
@@ -250,7 +251,7 @@ export function AdminBatchComplete({ token }) {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Imię, nazwisko, e-mail lub firma…"
+                placeholder="Imię, nazwisko, login (e-mail) lub firma…"
                 autoComplete="off"
                 style={{
                   flex: 1, padding: "10px 14px", border: `1.5px solid ${C.grey}`,
@@ -286,10 +287,14 @@ export function AdminBatchComplete({ token }) {
                     onMouseEnter={e => e.currentTarget.style.background = C.greyBg}
                     onMouseLeave={e => e.currentTarget.style.background = "none"}
                   >
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.black }}>{u.name || "—"}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.black }}>
+                      {u.name || u.login || "—"}
+                      {u.trainer_id && <span style={{ fontSize: 10, color: C.green, fontWeight: 700, marginLeft: 8 }}>TRENER T{u.trainer_id}</span>}
+                    </span>
                     <span style={{ fontSize: 11, color: C.greyMid }}>
-                      {u.email}
+                      {u.login && <span style={{ fontFamily: "monospace" }}>{u.login}</span>}
                       {u.firma && <span style={{ marginLeft: 8 }}>· {u.firma}</span>}
+                      {u.stanowisko && <span style={{ marginLeft: 8 }}>· {u.stanowisko}</span>}
                     </span>
                   </button>
                 ))}
