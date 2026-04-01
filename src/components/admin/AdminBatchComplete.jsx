@@ -218,8 +218,21 @@ export function AdminBatchComplete({ token }) {
           trainer:       item.trainerName,
         };
 
-        // upsert — jeśli już istnieje (user_id + training_id) to nadpisuje
-        await db.upsert(token, "completions", payload, "user_id,training_id");
+        // Sprawdź czy rekord już istnieje
+        const existing = await db.get(token, "completions",
+          `user_id=eq.${item.userId}&training_id=eq.${item.training.id}&select=id`
+        );
+
+        if (existing && existing.length > 0) {
+          // UPDATE istniejącego rekordu
+          await db.update(token, "completions",
+            `user_id=eq.${item.userId}&training_id=eq.${item.training.id}`,
+            { training_data: payload.training_data, date: payload.date, code_key: codeKey, trainer: payload.trainer }
+          );
+        } else {
+          // INSERT nowego rekordu
+          await db.insert(token, "completions", payload);
+        }
 
         setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: "ok", codeKey } : q));
       } catch(e) {
