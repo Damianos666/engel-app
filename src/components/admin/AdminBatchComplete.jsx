@@ -92,6 +92,9 @@ export function AdminBatchComplete({ token }) {
         if (r.ok) {
           data = await r.json();
           rpcOk = true;
+        } else {
+          const errText = await r.text();
+          console.warn("[search_users_for_admin] RPC error", r.status, errText);
         }
       } catch { /* RPC niedostępne */ }
 
