@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { C, GROUPS, TRAINERS } from "../../lib/constants";
 import { TRAININGS } from "../../data/trainings";
-import { db } from "../../lib/supabase";
+import { db, rpc, SB_URL, authHeaders } from "../../lib/supabase";
 import { Spinner } from "../SharedUI";
 import { useToast } from "../../lib/ToastContext";
 
@@ -79,11 +79,25 @@ export function AdminBatchComplete({ token }) {
     if (trimmed.length < 2) { setUsers([]); setSearchDone(false); return; }
     setSearching(true);
     try {
-      // profiles nie ma kolumny email — szukamy po name, login (= część emaila) i firma
-      const enc = encodeURIComponent(`%${trimmed}%`);
-      const data = await db.get(token, "profiles",
-        `or=(name.ilike.${enc},login.ilike.${enc},firma.ilike.${enc})&select=id,name,login,firma,stanowisko,role,trainer_id&limit=30&order=name.asc`
-      );
+      // Używamy RPC search_users_for_admin — łączy auth.users (email) z profiles
+      // Fallback na samo profiles jeśli funkcja SQL nie istnieje jeszcze w bazie
+      let data;
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/rpc/search_users_for_admin`, {
+          method: "POST",
+          headers: { ...authHeaders(token), "Content-Type": "application/json" },
+          body: JSON.stringify({ search_query: trimmed }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        data = await r.json();
+      } catch (rpcErr) {
+        // Fallback: szukaj tylko po name/login/firma w profiles (bez emaila)
+        console.warn("[search] RPC niedostępne, fallback na profiles:", rpcErr.message);
+        const enc = encodeURIComponent(`%${trimmed}%`);
+        data = await db.get(token, "profiles",
+          `or=(name.ilike.${enc},login.ilike.${enc},firma.ilike.${enc})&select=id,name,login,firma,stanowisko,role,trainer_id&limit=30&order=name.asc`
+        );
+      }
       setUsers(Array.isArray(data) ? data : []);
     } catch(e) {
       addToast("Błąd wyszukiwania: " + e.message);
@@ -105,7 +119,7 @@ export function AdminBatchComplete({ token }) {
   async function selectUser(u) {
     setSelUser(u);
     setUsers([]);
-    setQuery(u.name || u.login || "");
+    setQuery(u.name || u.email || u.login || "");
     setSearchDone(false);
     setLoadingComps(true);
     try {
@@ -207,7 +221,7 @@ export function AdminBatchComplete({ token }) {
           👤 Zalicz szkolenie uczestnikowi
         </div>
         <div style={{ fontSize: 12, color: C.greyMid, lineHeight: 1.5 }}>
-          Wyszukaj uczestnika po imieniu, nazwisku, loginie (część e-mail przed @) lub firmie. Wybierz szkolenie, datę i trenera — system doda zaliczenie i odblokuje certyfikat.
+          Wyszukaj uczestnika po imieniu, nazwisku, e-mail lub firmie. Wybierz szkolenie, datę i trenera — system doda zaliczenie i odblokuje certyfikat.
         </div>
       </div>
 
@@ -226,7 +240,10 @@ export function AdminBatchComplete({ token }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>{selUser.name || "—"}</div>
               <div style={{ fontSize: 11, color: C.greyDk }}>
-                {selUser.login && <span style={{ fontFamily: "monospace", fontSize: 12 }}>{selUser.login}</span>}
+                {selUser.email
+                  ? <span style={{ fontFamily: "monospace", fontSize: 12 }}>{selUser.email}</span>
+                  : selUser.login && <span style={{ fontFamily: "monospace", fontSize: 12 }}>{selUser.login}</span>
+                }
                 {selUser.firma && <span style={{ marginLeft: 8, opacity: .7 }}>· {selUser.firma}</span>}
                 {selUser.stanowisko && <span style={{ marginLeft: 8, opacity: .7 }}>· {selUser.stanowisko}</span>}
                 {selUser.trainer_id && <span style={{ marginLeft: 8, color: C.green, fontWeight: 700 }}>· 🎓 Trener T{selUser.trainer_id}</span>}
@@ -251,7 +268,7 @@ export function AdminBatchComplete({ token }) {
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Imię, nazwisko, login (e-mail) lub firma…"
+                placeholder="Imię, nazwisko, e-mail lub firma…"
                 autoComplete="off"
                 style={{
                   flex: 1, padding: "10px 14px", border: `1.5px solid ${C.grey}`,
@@ -288,11 +305,14 @@ export function AdminBatchComplete({ token }) {
                     onMouseLeave={e => e.currentTarget.style.background = "none"}
                   >
                     <span style={{ fontSize: 13, fontWeight: 700, color: C.black }}>
-                      {u.name || u.login || "—"}
+                      {u.name || u.login || u.email || "—"}
                       {u.trainer_id && <span style={{ fontSize: 10, color: C.green, fontWeight: 700, marginLeft: 8 }}>TRENER T{u.trainer_id}</span>}
                     </span>
                     <span style={{ fontSize: 11, color: C.greyMid }}>
-                      {u.login && <span style={{ fontFamily: "monospace" }}>{u.login}</span>}
+                      {u.email
+                        ? <span style={{ fontFamily: "monospace" }}>{u.email}</span>
+                        : u.login && <span style={{ fontFamily: "monospace" }}>{u.login}</span>
+                      }
                       {u.firma && <span style={{ marginLeft: 8 }}>· {u.firma}</span>}
                       {u.stanowisko && <span style={{ marginLeft: 8 }}>· {u.stanowisko}</span>}
                     </span>
