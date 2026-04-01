@@ -79,25 +79,51 @@ export function AdminBatchComplete({ token }) {
     if (trimmed.length < 2) { setUsers([]); setSearchDone(false); return; }
     setSearching(true);
     try {
-      // Używamy RPC search_users_for_admin — łączy auth.users (email) z profiles
-      // Fallback na samo profiles jeśli funkcja SQL nie istnieje jeszcze w bazie
-      let data;
+      // Próba 1: RPC search_users_for_admin (wymaga wdrożenia supabase_search_users.sql)
+      // Zwraca email z auth.users — pełne wyszukiwanie po emailu
+      let rpcOk = false;
+      let data = [];
       try {
         const r = await fetch(`${SB_URL}/rest/v1/rpc/search_users_for_admin`, {
           method: "POST",
           headers: { ...authHeaders(token), "Content-Type": "application/json" },
           body: JSON.stringify({ search_query: trimmed }),
         });
-        if (!r.ok) throw new Error(await r.text());
-        data = await r.json();
-      } catch (rpcErr) {
-        // Fallback: szukaj tylko po name/login/firma w profiles (bez emaila)
-        console.warn("[search] RPC niedostępne, fallback na profiles:", rpcErr.message);
-        const enc = encodeURIComponent(`%${trimmed}%`);
-        data = await db.get(token, "profiles",
-          `or=(name.ilike.${enc},login.ilike.${enc},firma.ilike.${enc})&select=id,name,login,firma,stanowisko,role,trainer_id&limit=30&order=name.asc`
-        );
+        if (r.ok) {
+          data = await r.json();
+          rpcOk = true;
+        }
+      } catch { /* RPC niedostępne */ }
+
+      if (!rpcOk) {
+        // Próba 2: szukaj w profiles po name, login, firma
+        // Jeśli wpisano pełny email (jan@firma.pl) — rozbij na część przed @ i domenę
+        const queries = new Set();
+        queries.add(trimmed); // całość
+
+        if (trimmed.includes("@")) {
+          const [localPart, domain] = trimmed.split("@");
+          if (localPart) queries.add(localPart);   // jan
+          if (domain)    queries.add(domain);       // firma.pl
+          // też próbuj "jan.kowalski" → "jan kowalski"
+          const spacedName = localPart.replace(/[._-]/g, " ");
+          if (spacedName !== localPart) queries.add(spacedName);
+        }
+
+        const results = new Map(); // id → user, deduplikacja
+        for (const term of queries) {
+          const enc = encodeURIComponent(`%${term}%`);
+          try {
+            const rows = await db.get(token, "profiles",
+              `or=(name.ilike.${enc},login.ilike.${enc},firma.ilike.${enc})` +
+              `&select=id,name,login,firma,stanowisko,role,trainer_id&limit=30&order=name.asc`
+            );
+            if (Array.isArray(rows)) rows.forEach(r => results.set(r.id, r));
+          } catch { /* ignoruj błędy pojedynczego termu */ }
+        }
+        data = [...results.values()];
       }
+
       setUsers(Array.isArray(data) ? data : []);
     } catch(e) {
       addToast("Błąd wyszukiwania: " + e.message);
