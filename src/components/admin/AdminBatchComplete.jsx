@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { C, GROUPS, TRAINERS } from "../../lib/constants";
 import { TRAININGS } from "../../data/trainings";
-import { db, rpc, SB_URL, authHeaders } from "../../lib/supabase";
+import { db, rpc, SB_URL, authHeaders, edge } from "../../lib/supabase";
 import { Spinner } from "../SharedUI";
 import { useToast } from "../../lib/ToastContext";
 
@@ -88,6 +88,13 @@ export function AdminBatchComplete({ token }) {
   /* — batch queue — */
   const [queue,        setQueue]        = useState([]);       // { id, userId, training, date, trainerNum, trainerName, status }
   const [saving,       setSaving]       = useState(false);
+
+  /* — kasowanie konta — */
+  const [deletePin,    setDeletePin]    = useState("");       // wygenerowany PIN do potwierdzenia
+  const [deletePinInput, setDeletePinInput] = useState("");  // co wpisał admin
+  const [deleteStatus, setDeleteStatus] = useState(null);    // null | "confirm" | "deleting" | "done" | "error"
+  const [deleteResult, setDeleteResult] = useState(null);
+  const [deleteError,  setDeleteError]  = useState("");
 
   /* ── Sync selTraining gdy zmienia się grupa ─────────────────────────────── */
   useEffect(() => {
@@ -294,6 +301,39 @@ export function AdminBatchComplete({ token }) {
 
   const groupTrainings = TRAININGS.filter(t => t.group === selGroup);
   const pendingCount = queue.filter(q => q.status !== "already" && q.status !== "ok").length;
+
+  /* ── Kasowanie konta ─────────────────────────────────────────────────────── */
+  function startDelete() {
+    // Generuj 6-cyfrowy PIN — admin musi go przepisać żeby potwierdzić
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
+    setDeletePin(pin);
+    setDeletePinInput("");
+    setDeleteStatus("confirm");
+    setDeleteResult(null);
+    setDeleteError("");
+  }
+
+  function cancelDelete() {
+    setDeleteStatus(null);
+    setDeletePinInput("");
+    setDeletePin("");
+  }
+
+  async function confirmDelete() {
+    if (deletePinInput !== deletePin) return;
+    setDeleteStatus("deleting");
+    try {
+      const result = await edge.deleteUser(token, selUser.id);
+      setDeleteResult(result);
+      setDeleteStatus("done");
+      addToast(`✓ Konto ${result.deleted_email} zostało usunięte`);
+      // Wyczyść wybranego usera — już nie istnieje
+      clearUser();
+    } catch (e) {
+      setDeleteError(e.message || "Błąd serwera");
+      setDeleteStatus("error");
+    }
+  }
 
   /* ═══════════════════════════════════════════════════════════════════════════ */
   return (
@@ -632,6 +672,133 @@ export function AdminBatchComplete({ token }) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ── Kasowanie konta użytkownika ── */}
+      {selUser && deleteStatus === null && (
+        <div style={{ background: C.white, borderRadius: 8, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,.08)", border: "1px solid #FDDEDE" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#C0392B", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+            ⚠ Strefa niebezpieczna
+          </div>
+          <div style={{ fontSize: 12, color: C.greyDk, marginBottom: 12, lineHeight: 1.5 }}>
+            Trwałe usunięcie konta <strong>{selUser.name || selUser.login}</strong> wraz ze wszystkimi danymi (zaliczenia, gamifikacja, historia).
+          </div>
+          <button onClick={startDelete} style={{
+            background: "none", border: "1.5px solid #E74C3C", color: "#C0392B",
+            padding: "9px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6,
+            cursor: "pointer",
+          }}>
+            🗑 Usuń konto tego użytkownika
+          </button>
+        </div>
+      )}
+
+      {/* ── Potwierdzenie PIN ── */}
+      {selUser && deleteStatus === "confirm" && (
+        <div style={{ background: "#FDF3F3", borderRadius: 8, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,.08)", border: "1.5px solid #E74C3C" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#C0392B", marginBottom: 12 }}>
+            🗑 Potwierdzenie usunięcia konta
+          </div>
+          <div style={{ fontSize: 12, color: C.greyDk, lineHeight: 1.6, marginBottom: 16 }}>
+            Konto: <strong style={{ fontFamily: "monospace" }}>{selUser.name || selUser.login}</strong><br/>
+            Zostaną usunięte: zaliczenia, gamifikacja, historia quizów, odczyty wiadomości.<br/>
+            <strong style={{ color: "#C0392B" }}>Tej operacji nie można cofnąć.</strong>
+          </div>
+
+          {/* PIN do przepisania */}
+          <div style={{
+            background: C.white, border: "1px solid #F5B7B1", borderRadius: 8,
+            padding: "14px 16px", marginBottom: 16, textAlign: "center",
+          }}>
+            <div style={{ fontSize: 11, color: C.greyMid, marginBottom: 6 }}>Przepisz ten kod aby potwierdzić:</div>
+            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: "monospace", letterSpacing: 6, color: "#C0392B" }}>
+              {deletePin}
+            </div>
+          </div>
+
+          <input
+            type="text"
+            value={deletePinInput}
+            onChange={e => setDeletePinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="Wpisz kod…"
+            maxLength={6}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "11px 14px", fontSize: 20, fontFamily: "monospace",
+              letterSpacing: 4, textAlign: "center", fontWeight: 700,
+              border: `2px solid ${deletePinInput === deletePin ? "#27AE60" : deletePinInput.length === 6 ? "#E74C3C" : C.grey}`,
+              borderRadius: 6, outline: "none", marginBottom: 14,
+              background: C.white, color: C.black,
+            }}
+          />
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={cancelDelete} style={{
+              flex: 1, background: "none", border: `1px solid ${C.grey}`,
+              color: C.greyDk, padding: "10px 0", fontSize: 12, fontWeight: 700,
+              borderRadius: 6, cursor: "pointer",
+            }}>
+              Anuluj
+            </button>
+            <button
+              onClick={confirmDelete}
+              disabled={deletePinInput !== deletePin}
+              style={{
+                flex: 2, padding: "10px 0", fontSize: 12, fontWeight: 700,
+                borderRadius: 6, border: "none", cursor: deletePinInput === deletePin ? "pointer" : "not-allowed",
+                background: deletePinInput === deletePin ? "#C0392B" : "#FADBD8",
+                color: deletePinInput === deletePin ? C.white : "#E74C3C",
+                transition: "all .2s",
+              }}>
+              ✓ Potwierdź i usuń konto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Trwa kasowanie ── */}
+      {deleteStatus === "deleting" && (
+        <div style={{ background: "#FDF3F3", borderRadius: 8, padding: 20, textAlign: "center", border: "1px solid #F5B7B1" }}>
+          <Spinner size={24} />
+          <div style={{ fontSize: 13, color: C.greyDk, marginTop: 10 }}>Usuwam konto i dane…</div>
+        </div>
+      )}
+
+      {/* ── Wynik kasowania ── */}
+      {deleteStatus === "done" && deleteResult && (
+        <div style={{ background: "#EAFAF1", borderRadius: 8, padding: 20, border: "1px solid #27AE60" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1D8348", marginBottom: 12 }}>
+            ✅ Konto zostało trwale usunięte
+          </div>
+          <div style={{ fontSize: 12, color: C.greyDk, marginBottom: 10 }}>
+            <strong>Email:</strong> <code style={{ fontFamily: "monospace" }}>{deleteResult.deleted_email}</code><br/>
+            <strong>Usunął:</strong> {deleteResult.deleted_by}
+          </div>
+          <div style={{ fontSize: 11, color: C.greyMid }}>
+            {Object.entries(deleteResult.rows_deleted || {}).map(([tbl, cnt]) => (
+              <span key={tbl} style={{ display: "inline-block", marginRight: 12 }}>
+                <code>{tbl}</code>: {cnt} {cnt === 1 ? "rekord" : "rekordów"}
+              </span>
+            ))}
+          </div>
+          <button onClick={() => setDeleteStatus(null)} style={{
+            marginTop: 12, background: "none", border: `1px solid ${C.grey}`,
+            color: C.greyDk, padding: "7px 16px", fontSize: 11, fontWeight: 700,
+            borderRadius: 5, cursor: "pointer",
+          }}>OK</button>
+        </div>
+      )}
+
+      {/* ── Błąd kasowania ── */}
+      {deleteStatus === "error" && (
+        <div style={{ background: "#FDF3F3", borderRadius: 8, padding: 16, border: "1px solid #E74C3C" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#C0392B", marginBottom: 8 }}>✕ Błąd usuwania</div>
+          <div style={{ fontSize: 12, color: C.greyDk, marginBottom: 12 }}>{deleteError}</div>
+          <button onClick={cancelDelete} style={{
+            background: "none", border: `1px solid ${C.grey}`, color: C.greyDk,
+            padding: "7px 16px", fontSize: 11, fontWeight: 700, borderRadius: 5, cursor: "pointer",
+          }}>Zamknij</button>
         </div>
       )}
 

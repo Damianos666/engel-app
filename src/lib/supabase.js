@@ -19,24 +19,40 @@ export const authHeaders = (token) => ({
 // BEZPIECZEŃSTWO: access_token żyje TYLKO w pamięci RAM.
 // W localStorage zapisujemy wyłącznie refresh_token + minimalne dane usera.
 // Przy XSS atakujący nie może wyciągnąć access_token z localStorage.
+//
+// persist=true  → "zapamiętaj mnie" — refreshToken trafia do localStorage
+// persist=false → sesja przeglądarkowa — refreshToken żyje tylko w RAM
+//   Dzięki temu użytkownik bez "zapamiętaj" NIE jest wylogowywany po 1h
+//   (access_token wygasa, ale RAM-owy refreshToken pozwala go odświeżyć).
 const SESSION_KEY = "eea_session";
-let _memoryToken = null;
+let _memoryToken        = null;
+let _memoryRefreshToken = null;
+let _memoryUser         = null;
 
 export const session = {
-  save: (accessToken, refreshToken, user) => {
-    _memoryToken = accessToken;
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ refreshToken, user }));
-    } catch {}
+  save: (accessToken, refreshToken, user, persist = true) => {
+    _memoryToken        = accessToken;
+    _memoryRefreshToken = refreshToken;
+    _memoryUser         = user;
+    if (persist) {
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ refreshToken, user }));
+      } catch {}
+    }
   },
   load: () => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    // Fallback: RAM — dla sesji bez "zapamiętaj mnie"
+    if (_memoryRefreshToken) return { refreshToken: _memoryRefreshToken, user: _memoryUser };
+    return null;
   },
   clear: () => {
-    _memoryToken = null;
+    _memoryToken        = null;
+    _memoryRefreshToken = null;
+    _memoryUser         = null;
     try { localStorage.removeItem(SESSION_KEY); } catch {}
   },
   getToken: () => _memoryToken,
@@ -122,6 +138,18 @@ export const auth = {
     }, AUTH_TIMEOUT_MS);
     if (!r.ok) { const d = await r.json(); throw new Error(d.msg || "Błąd"); }
   },
+};
+
+/* ─── TOKEN EXPIRY CHECK ─────────────────────────────────────────────────── */
+// Dekoduje JWT i sprawdza czy wygasł (z 60s marginesem).
+// Używane w visibilitychange — nie wystarczy sprawdzić czy token jest null,
+// bo _memoryToken może trzymać stary, wygasły JWT po powrocie z tła.
+export const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now() + 60_000; // 60s bufor bezpieczeństwa
+  } catch { return true; }
 };
 
 /* ─── AUTO-REFRESH ───────────────────────────────────────────────────────── */
@@ -219,38 +247,75 @@ export const db = {
 };
 
 /* ─── EDGE FUNCTIONS ─────────────────────────────────────────────────────── */
-export const APP_URL = import.meta.env.VITE_APP_URL || "https://engel-eea.vercel.app";
+export const APP_URL = import.meta.env.VITE_APP_URL;
 
 const edgeFetch = async (token, fnName, body) => {
   // Edge functions dostają osobny timeout — mogą być wolniejsze (cold start Deno)
   const EDGE_TIMEOUT_MS = 25_000;
-  let r;
-  try {
-    r = await fetchWithTimeout(`${SB_URL}/functions/v1/${fnName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-        "apikey": SB_ANON,
-      },
-      body: JSON.stringify(body),
-    }, EDGE_TIMEOUT_MS);
-  } catch(e) {
-    console.error("[edgeFetch] Błąd sieci lub parsowania odpowiedzi:", e);
-    if (e.message.includes("Serwer nie odpowiada")) throw e;
-    throw new Error("Brak połączenia z serwerem.");
+
+  // Wydzielona funkcja pomocnicza — wykonuje jeden request z danym tokenem
+  const doRequest = async (tok) => {
+    try {
+      return await fetchWithTimeout(`${SB_URL}/functions/v1/${fnName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${tok}`,
+          "apikey": SB_ANON,
+        },
+        body: JSON.stringify(body),
+      }, EDGE_TIMEOUT_MS);
+    } catch (e) {
+      console.error("[edgeFetch] Błąd sieci:", e);
+      if (e.message.includes("Serwer nie odpowiada")) throw e;
+      throw new Error("Brak połączenia z serwerem.");
+    }
+  };
+
+  let r = await doRequest(token);
+
+  // Auto-refresh na 401 — analogicznie do fetchWithRefresh używanego przez db.*
+  // Bez tego wygasły JWT kończy się "Błąd serwera" zamiast przezroczystego odświeżenia
+  if (r.status === 401) {
+    const saved = session.load();
+    if (!saved?.refreshToken) throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+    try {
+      const refreshed = await auth.refreshSession(saved.refreshToken);
+      session.save(refreshed.access_token, refreshed.refresh_token, refreshed.user);
+      session.setToken(refreshed.access_token);
+      if (_onTokenRefreshed) _onTokenRefreshed(refreshed.access_token);
+      r = await doRequest(refreshed.access_token);
+    } catch (e) {
+      if (e.message.includes("Brak połączenia") || e.message.includes("Serwer nie odpowiada")) throw e;
+      session.clear();
+      throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+    }
   }
-  const d = await r.json();
+
+  // r.json() wewnątrz try-catch — bez tego non-JSON odpowiedź (502, HTML error page)
+  // rzuca uncaught SyntaxError zamiast czytelnego komunikatu
+  let d;
+  try {
+    d = await r.json();
+  } catch {
+    throw new Error(`Nieprawidłowa odpowiedź serwera (HTTP ${r.status}).`);
+  }
+
   if (!r.ok) throw new Error(d.error || "Błąd serwera");
   return d;
 };
 
 export const edge = {
-  generateCode: (token, training_short, trainer_id, is_special = false, special_title = "") =>
-    edgeFetch(token, "generate-training-code", { training_short, trainer_id, is_special, special_title }),
+  generateCode: (token, training_short, trainer_id, is_special = false, special_title = "", special_days = null) =>
+    edgeFetch(token, "generate-training-code", { training_short, trainer_id, is_special, special_title, special_days }),
 
   verifyCode: (token, code, special_title, special_days) =>
     edgeFetch(token, "verify-training-code", { code, special_title, special_days }),
+
+  // Kasuje konto użytkownika i wszystkie powiązane dane.
+  // Wymaga roli admin — Edge Function weryfikuje to server-side przez service_role.
+  deleteUser: (token, target_user_id) =>
+    edgeFetch(token, "delete-user", { target_user_id }),
 };
 
 /* ─── REALTIME ───────────────────────────────────────────────────────────── */

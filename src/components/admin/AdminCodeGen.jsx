@@ -16,6 +16,7 @@ export function AdminCodeGen({ defaultTrainer }) {
   const [qrDataUrl,   setQrDataUrl]   = useState(null);
   const [copied,      setCopied]      = useState(false);
   const [specialTitle, setSpecialTitle] = useState("");
+  const [specialDays,  setSpecialDays]  = useState(1);
 
   function handleGroupChange(gid) {
     setSelGroup(gid);
@@ -28,10 +29,16 @@ export function AdminCodeGen({ defaultTrainer }) {
     try {
       const training = TRAININGS.find(t => t.id === selTraining);
       const short    = mode === "special" ? "ST" : (training?.short || selTraining);
-      const data     = await edge.generateCode(token, short, selTrainer, mode === "special", specialTitle);
-      setResult(data);
+      const days     = mode === "special" ? specialDays : null;
+      const data     = await edge.generateCode(token, short, selTrainer, mode === "special", specialTitle, days);
+      // Append days to verifyUrl so the scanner can read it
+      let verifyUrl = data.verifyUrl || "";
+      if (mode === "special" && days && days > 1 && verifyUrl) {
+        verifyUrl += (verifyUrl.includes("?") ? "&" : "?") + `days=${days}`;
+      }
+      setResult({ ...data, verifyUrl });
       const QRCode = await import("qrcode");
-      const dataUrl = await QRCode.default.toDataURL(data.verifyUrl, {
+      const dataUrl = await QRCode.default.toDataURL(verifyUrl, {
         width: 320, margin: 2,
         color: { dark: "#1A1A1A", light: "#FFFFFF" },
       });
@@ -107,12 +114,31 @@ export function AdminCodeGen({ defaultTrainer }) {
                 Nazwa zostanie zakodowana w QR — uczestnik nie musi jej wpisywać.
               </div>
             </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 8, letterSpacing: .5 }}>
+                KROK 2 — LICZBA DNI
+              </label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[1, 2, 3, 4, 5].map(d => (
+                  <button key={d} onClick={() => setSpecialDays(d)}
+                    style={{ flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      border: `1.5px solid ${specialDays === d ? C.green : C.grey}`,
+                      background: specialDays === d ? C.green : C.white,
+                      color: specialDays === d ? C.white : C.greyDk, borderRadius: 4 }}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.greyMid, marginTop: 5 }}>
+                Liczba dni zostanie zakodowana w QR i automatycznie przypisana uczestnikowi.
+              </div>
+            </div>
           </>
         )}
 
         <div style={{ marginBottom: 18 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.greyDk, marginBottom: 8, letterSpacing: .5 }}>
-            {mode === "normal" ? "KROK 3" : "KROK 2"} — TRENER
+            {mode === "normal" ? "KROK 3" : "KROK 3"} — TRENER
           </label>
           <select value={selTrainer} onChange={e => setSelTrainer(Number(e.target.value))}
             style={{ width: "100%", padding: "11px 14px", fontSize: 13, border: `1.5px solid ${C.green}`, background: C.white, color: C.black, cursor: "pointer" }}>
@@ -132,10 +158,10 @@ export function AdminCodeGen({ defaultTrainer }) {
       {result && qrDataUrl && (
         <div style={{ background: C.white, border: `3px solid ${C.green}`, padding: 20, textAlign: "center" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, letterSpacing: 1, marginBottom: 4, textTransform: "uppercase" }}>
-            {mode === "special" ? "Szkolenie specjalne (ST)" : selectedTraining?.title}
+            {mode === "special" ? `Szkolenie specjalne (ST) — ${result.specialTitle || specialTitle}` : selectedTraining?.title}
           </div>
           <div style={{ fontSize: 11, color: C.greyMid, marginBottom: 16 }}>
-            📅 {today} · 👤 {TRAINERS[selTrainer]}
+            📅 {today} · 👤 {TRAINERS[selTrainer]}{mode === "special" ? ` · 📆 ${specialDays} ${specialDays === 1 ? "dzień" : "dni"}` : ""}
           </div>
 
           <img src={qrDataUrl} alt="QR kod szkolenia"

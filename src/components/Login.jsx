@@ -96,10 +96,10 @@ export function AuthForm({ mode, setMode, onLogin }) {
 
       if (remember) {
         localStorage.setItem(LS_REMEMBER_KEY, "true");
-        session.save(s.access_token, s.refresh_token, s.user);
+        session.save(s.access_token, s.refresh_token, s.user, true);  // persist → localStorage
       } else {
         localStorage.removeItem(LS_REMEMBER_KEY);
-        session.clear();
+        session.save(s.access_token, s.refresh_token, s.user, false); // persist=false → tylko RAM
       }
 
       // Udane logowanie — resetuj licznik prób

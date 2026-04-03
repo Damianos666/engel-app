@@ -58,13 +58,29 @@ export function CertModal({ entry, user, onClose }) {
   const { addToast } = useToast();
   const { token } = useUser();
   const [generating, setGenerating] = useState(false);
-  // Nr certyfikatu: ID_SZKOLENIADDMMYYYYIINNSS
-  // II = 2 litery imienia, NN = 2 litery nazwiska, SS = 2 ostatnie znaki UUID
-  // Nr certyfikatu: ID_SZKOLENIADDMMYYYYXXX
-  // XXX = ostatnie 3 znaki UUID (hex) → 4096 kombinacji, wystarczy dla max 20 osób/szkolenie
-  const uidSuffix = (user.id || "").replace(/-/g, "").slice(-3).toUpperCase();
-  const certId = `${entry.training.id}${entry.date.replace(/\./g,"")}${uidSuffix}`;
+  const [certId, setCertId] = useState("…");
   const sub = [user.displayRole, user.firma].filter(Boolean).join(" · ");
+
+  // Generowanie numeru certyfikatu — async (HMAC-SHA256)
+  // Format: CCYDDDTSSSSS (12 znaków)
+  // CC=nr szkolenia, Y=rok(litera), DDD=dzień roku, T=trener, SSSSS=podpis HMAC
+  useEffect(() => {
+    let cancelled = false;
+    const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
+    import("../lib/certId").then(({ generateCertId }) =>
+      generateCertId({
+        trainingId: entry.training.id,
+        date:       entry.date,
+        trainer:    trainerNum,
+        uid:        user.id || "",
+      })
+    ).then(id => {
+      if (!cancelled) setCertId(id);
+    }).catch(() => {
+      if (!cancelled) setCertId("ERR");
+    });
+    return () => { cancelled = true; };
+  }, [entry.training.id, entry.date, entry.key, user.id]);
 
   async function downloadPDF() {
     setGenerating(true);

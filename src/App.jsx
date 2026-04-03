@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, Component } from "react";
 import { C, GROUPS } from "./lib/constants";
-import { auth, db, session, setOnTokenRefreshed, realtime } from "./lib/supabase";
+import { auth, db, session, setOnTokenRefreshed, realtime, isTokenExpired } from "./lib/supabase";
 import { calcProgress } from "./lib/helpers";
 import { log, err as logErr } from "./lib/logger";
 import { LangProvider } from "./lib/LangContext";
@@ -295,7 +295,7 @@ function AppRoot({ onMounted }) {
       if (document.visibilityState !== "visible") return;
       if (!user) return;
       const currentToken = session.getToken();
-      if (!currentToken) await proactiveRefresh();
+      if (!currentToken || isTokenExpired(currentToken)) await proactiveRefresh();
     }
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
@@ -416,6 +416,7 @@ function AppRoot({ onMounted }) {
   const handleLogout = useCallback(async () => {
     try { await auth.signOut(user?.accessToken); } catch {}
     try { await caches.delete("supabase-api"); } catch {}
+    try { localStorage.removeItem("eea_remember"); } catch {}
     if (realtimeUnsub.current) { realtimeUnsub.current(); realtimeUnsub.current = null; }
     setUserRaw(null); setCompleted([]); setTab(0); setMsgCount(0);
     setTrainerViewRaw("client"); setTrainingOverrides({});

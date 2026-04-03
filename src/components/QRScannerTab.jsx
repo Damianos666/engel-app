@@ -81,13 +81,22 @@ export function QRScannerTab({ token, onComplete, onClose }) {
         // Wyciągnij kod i opcjonalny tytuł z URL: .../verify/KOD?title=Nazwa
         const match = url.match(/\/verify\/([A-Z0-9-]+)/i);
         const code  = match ? match[1] : url;
-        const titleParam = url.includes("?title=")
-          ? decodeURIComponent(url.split("?title=")[1])
-          : "";
+        // Parsuj parametry URL poprawnie (obsługa title i days)
+        let titleParam = "";
+        let daysParam  = undefined;
+        try {
+          const qIndex = url.indexOf("?");
+          if (qIndex !== -1) {
+            const params = new URLSearchParams(url.slice(qIndex + 1));
+            titleParam = params.get("title") ? decodeURIComponent(params.get("title")) : "";
+            const d = parseInt(params.get("days"), 10);
+            if (!isNaN(d) && d > 0) daysParam = d;
+          }
+        } catch (_) {}
         if (code) {
           scanningRef.current = false;
           stopCamera();
-          verifyCode(code, titleParam);
+          verifyCode(code, titleParam, daysParam);
           return;
         }
       }
@@ -108,7 +117,7 @@ export function QRScannerTab({ token, onComplete, onClose }) {
     cancelAnimationFrame(rafRef.current);
   }
 
-  async function verifyCode(code, specialTitle = "") {
+  async function verifyCode(code, specialTitle = "", specialDays = undefined, attempt = 1) {
     setStatus("verifying");
     // Czytamy z ref — zawsze aktualny token, bez stale closure
     const tok = tokenRef.current;
@@ -118,7 +127,7 @@ export function QRScannerTab({ token, onComplete, onClose }) {
       return;
     }
     try {
-      const result = await edge.verifyCode(tok, code, specialTitle || undefined);
+      const result = await edge.verifyCode(tok, code, specialTitle || undefined, specialDays);
       setStatus("success");
       if (navigator.vibrate) navigator.vibrate([60, 80, 120, 60, 200]);
       // Poczekaj chwilę żeby użytkownik zobaczył sukces, potem zamknij
@@ -130,6 +139,18 @@ export function QRScannerTab({ token, onComplete, onClose }) {
         onClose();
       }, 1200);
     } catch (e) {
+      // Auto-retry raz dla przejściowych błędów sieciowych.
+      // Na iOS PWA po powrocie z tła pierwsza próba fetch() często kończy się
+      // TypeError ("Failed to fetch") zanim sieć się "przebudzi" — jedno retry
+      // z krótkim opóźnieniem rozwiązuje ten problem bez widocznego efektu dla użytkownika.
+      if (attempt === 1 && (
+        e.message.includes("Brak połączenia") ||
+        e.message.includes("Failed to fetch") ||
+        e.message.includes("Network request failed")
+      )) {
+        await new Promise(res => setTimeout(res, 1200));
+        return verifyCode(code, specialTitle, specialDays, 2);
+      }
       setStatus("error");
       setMessage(e.message || "Nieprawidłowy kod QR");
     }

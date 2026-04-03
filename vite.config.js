@@ -5,9 +5,12 @@ import { writeFileSync } from 'fs'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const supabaseHost = env.VITE_SUPABASE_URL
-    ? new URL(env.VITE_SUPABASE_URL).hostname
-    : 'localhost'
+  // loadEnv() czyta wyłącznie z plików .env.* — nie widzi zmiennych z Vercel dashboard.
+  // Vercel wstrzykuje je do process.env podczas buildu, więc używamy go jako fallback.
+  const rawSupabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const supabaseHost = rawSupabaseUrl
+    ? new URL(rawSupabaseUrl).hostname
+    : null;
 
   const buildTime = Date.now().toString();
   try { writeFileSync('public/version.json', JSON.stringify({ v: buildTime })); } catch(e) {}
@@ -42,7 +45,7 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,ttf,woff2}'],
           globIgnores: ['version.json'],
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-          runtimeCaching: [
+          runtimeCaching: supabaseHost ? [
             {
               urlPattern: new RegExp(`^https://${supabaseHost}/rest/v1/.*`, 'i'),
               handler: 'NetworkFirst',
@@ -51,7 +54,7 @@ export default defineConfig(({ mode }) => {
                 expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
               },
             },
-          ],
+          ] : [],
         },
       }),
     ],

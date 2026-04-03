@@ -76,6 +76,37 @@ export function TrainerScheduleTab({ trainerNum }) {
   const scrollRestoreDate   = useRef(null);   // data centrum — przywracana po zmianie cellW/obrotu
   const isOrientChanging    = useRef(false);  // blokuje nadpisanie scrollRestoreDate podczas obrotu
 
+  // ── Drag-to-scroll (mysz na desktopie) ────────────────────────────────────
+  const isDragging   = useRef(false);
+  const dragStartX   = useRef(0);
+  const dragScrollL  = useRef(0);
+
+  function onMouseDown(e) {
+    if (e.button !== 0) return; // tylko lewy przycisk
+    isDragging.current  = true;
+    dragStartX.current  = e.clientX;
+    dragScrollL.current = timelineRef.current?.scrollLeft || 0;
+    e.currentTarget.style.cursor = "grabbing";
+    e.currentTarget.style.userSelect = "none";
+  }
+  function onMouseMove(e) {
+    if (!isDragging.current) return;
+    const dx = e.clientX - dragStartX.current;
+    if (timelineRef.current) timelineRef.current.scrollLeft = dragScrollL.current - dx;
+  }
+  const dragMoved = useRef(false);
+
+  function onMouseUp(e) {
+    if (!isDragging.current) return;
+    const dx = Math.abs(e.clientX - dragStartX.current);
+    dragMoved.current  = dx > 5; // kliknięcie vs przeciągnięcie
+    isDragging.current = false;
+    e.currentTarget.style.cursor = "grab";
+    e.currentTarget.style.userSelect = "";
+    // Reset po krótkim czasie — żeby onClick na barze mógł sprawdzić flagę
+    setTimeout(() => { dragMoved.current = false; }, 0);
+  }
+
   const [cellW, setCellW] = useState(0);
 
   function toggleTrainer(n) {
@@ -282,7 +313,10 @@ export function TrainerScheduleTab({ trainerNum }) {
         {loading ? (
           <div style={{padding:20,textAlign:"center",color:C.greyMid,fontSize:12}}>{T.loading}</div>
         ) : (
-          <div ref={timelineRef} onScroll={onScroll} style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+          <div ref={timelineRef} onScroll={onScroll}
+            onMouseDown={onMouseDown} onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+            style={{overflowX:"auto",WebkitOverflowScrolling:"touch",cursor:"grab"}}>
             <div style={{display:"inline-block",minWidth:"100%",verticalAlign:"top"}}>
 
               <div style={{display:"flex",borderBottom:`2px solid ${C.grey}`}}>
@@ -334,7 +368,7 @@ export function TrainerScheduleTab({ trainerNum }) {
 
                     {(trainerBars[trainerId]||[]).map((bar,bi)=>(
                       <div key={bi}
-                        onClick={()=>handleTap(bar.entry)}
+                        onClick={()=>{ if (!dragMoved.current) handleTap(bar.entry); }}
                         onContextMenu={e=>e.preventDefault()}
                         title="Przytrzymaj → notatki"
                         style={{position:"absolute",left:bar.left,top:4,height:22,width:bar.width,zIndex:2,background:bar.color,borderRadius:3,display:"flex",alignItems:"center",padding:"0 3px",gap:2,cursor:"pointer",overflow:"hidden",boxSizing:"border-box",opacity:bar.isPlanned?0.75:1,border:bar.isHidden?"1px solid rgba(0,0,0,.35)":"none"}}>
@@ -382,7 +416,7 @@ export function TrainerScheduleTab({ trainerNum }) {
             const isPlanned = (s.status||"active")==="planned";
             return (
               <div key={s.id}
-                onClick={()=>handleTap(s)}
+                onClick={()=>{ if (!dragMoved.current) handleTap(s); }}
                 onContextMenu={e=>e.preventDefault()}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.grey}`,opacity:isPlanned?0.6:1,cursor:"pointer"}}>
                 <div style={{width:4,alignSelf:"stretch",background:isPlanned?"#BBBBBB":barColor,borderRadius:2,flexShrink:0}}/>
