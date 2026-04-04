@@ -61,8 +61,10 @@ export function AdminPanel({ user, onLogout }) {
       if (type === "INSERT") {
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("🙋 ENGEL Expert Academy", {
-            body: `Masz nowe zgłoszenie na szkolenie!`,
+            body: `Nowe zgłoszenie: ${record?.name || record?.email || "Ktoś jest zainteresowany"}`,
             icon: "/pwa-192.png", badge: "/pwa-192.png",
+            tag: `interest-${record?.id || Date.now()}`,
+            renotify: true,
             vibrate: [200, 100, 200],
           });
         }
