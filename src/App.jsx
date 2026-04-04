@@ -195,21 +195,18 @@ function AppRoot({ onMounted }) {
       const newestAt = msgs[0].created_at;
       if (lastMsgAt.current && newestAt > lastMsgAt.current) {
         const newMsgs = msgs.filter(m => m.created_at > lastMsgAt.current);
-        newMsgs.forEach(m => {
-          // In-app toast — zawsze widoczny w aplikacji
-          addToast(`📬 ${m.title}`, "info");
-          // Natywna notyfikacja OS — tylko jeśli jest zgoda
-          if ("Notification" in window && Notification.permission === "granted") {
+        if ("Notification" in window && Notification.permission === "granted") {
+          newMsgs.forEach(m => {
             new Notification("📬 ENGEL Expert Academy", {
               body: m.title, icon: "/pwa-192.png", badge: "/pwa-192.png",
               tag: `msg-${m.id}`, renotify: true,
             });
-          }
-        });
+          });
+        }
       }
       lastMsgAt.current = newestAt;
     } catch { /* cicho ignoruj błędy pollingu */ }
-  }, [addToast]);
+  }, []);
 
   useEffect(() => {
     if (!user) {
