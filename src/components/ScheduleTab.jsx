@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { C, GROUPS, LVL_COLOR, LVL_LABEL } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
-import { db } from "../lib/supabase";
+import { db, realtime } from "../lib/supabase";
 import { useT } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
 import { useToast } from "../lib/ToastContext";
@@ -52,6 +52,7 @@ export function ScheduleTab({ activeGroups }) {
   const [myInterests,     setMyInterests]     = useState(new Set());
   const [myContacted,     setMyContacted]     = useState(new Set()); // sid gdzie admin oznaczył contacted=true
   const [interestLoading, setInterestLoading] = useState(new Set());
+  const prevContactedRef = useRef(new Set()); // do wykrywania nowych contacted
 
   useEffect(() => {
     async function load() {
@@ -88,6 +89,43 @@ export function ScheduleTab({ activeGroups }) {
       }
     }
     load();
+
+    // Realtime — nasłuchuj na UPDATE w training_interests tego użytkownika.
+    // Gdy admin oznaczy contacted=true, klient dostaje powiadomienie Windows.
+    if (!user?.id) return;
+    const unsub = realtime.onNewInterest(token, async () => {
+      try {
+        const interestData = await db.get(
+          token,
+          "training_interests",
+          `select=scheduled_training_id,is_withdrawn,contacted,scheduled:scheduled_trainings(training_id,date)&user_id=eq.${user.id}`
+        );
+        if (!Array.isArray(interestData)) return;
+        const active = interestData.filter(r => !r.is_withdrawn);
+        const newContactedSet = new Set(active.filter(r => r.contacted).map(r => r.scheduled_training_id));
+
+        // Wykryj nowo dodane contacted (były false, teraz true)
+        const newlyContacted = active.filter(r =>
+          r.contacted && !prevContactedRef.current.has(r.scheduled_training_id)
+        );
+        if (newlyContacted.length > 0 && "Notification" in window && Notification.permission === "granted") {
+          newlyContacted.forEach(r => {
+            const trainingId = r.scheduled?.training_id;
+            const date = r.scheduled?.date ? new Date(r.scheduled.date).toLocaleDateString("pl-PL") : "";
+            new Notification("📬 ENGEL Expert Academy", {
+              body: `Zostałeś zapisany na szkolenie${date ? " (" + date + ")" : ""}!`,
+              icon: "/pwa-192.png", badge: "/pwa-192.png",
+              tag: `enrolled-${r.scheduled_training_id}`, renotify: true,
+            });
+          });
+        }
+
+        prevContactedRef.current = newContactedSet;
+        setMyInterests(new Set(active.map(r => r.scheduled_training_id)));
+        setMyContacted(newContactedSet);
+      } catch {}
+    });
+    return () => unsub();
   }, [token, user?.id]);
 
   async function toggleInterest(s, e) {
