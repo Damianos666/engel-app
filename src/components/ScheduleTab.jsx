@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { C, GROUPS } from "../lib/constants";
+import { C, GROUPS, LVL_COLOR, LVL_LABEL } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
 import { useT } from "../lib/LangContext";
@@ -38,30 +38,69 @@ function downloadICS(s, t) {
 }
 
 export function ScheduleTab({ activeGroups }) {
-  const { token } = useUser();
+  const { token, user } = useUser();
   const T = useT();
-  const [scheduled, setScheduled]   = useState([]);
-  const [loading,   setLoading]     = useState(true);
-  const [selected,  setSelected]    = useState(null);
-  const [viewYear,  setViewYear]    = useState(new Date().getFullYear());
-  const [viewMonth, setViewMonth]   = useState(new Date().getMonth());
-  const [holidays,  setHolidays]    = useState({});
+  const [scheduled,       setScheduled]       = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [selected,        setSelected]        = useState(null);
+  const [viewYear,        setViewYear]        = useState(new Date().getFullYear());
+  const [viewMonth,       setViewMonth]       = useState(new Date().getMonth());
+  const [holidays,        setHolidays]        = useState({});
+  const [expandedCard,    setExpandedCard]    = useState(null);
+  const [myInterests,     setMyInterests]     = useState(new Set());
+  const [interestLoading, setInterestLoading] = useState(new Set());
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const data = await db.get(token, "scheduled_trainings", "order=date.asc");
-        const all = Array.isArray(data) ? data : [];
+        const [schedData, interestData] = await Promise.all([
+          db.get(token, "scheduled_trainings", "order=date.asc"),
+          db.get(token, "training_interests", "select=scheduled_training_id"),
+        ]);
+        const all = Array.isArray(schedData) ? schedData : [];
         const todayStr = toISO(new Date());
         setScheduled(all.filter(s =>
           (s.end_date || s.date) >= todayStr && !s.is_hidden && !s.is_outgoing
         ));
+        if (Array.isArray(interestData)) {
+          setMyInterests(new Set(interestData.map(r => r.scheduled_training_id)));
+        }
       } catch { setScheduled([]); }
       finally { setLoading(false); }
     }
     load();
   }, [token]);
+
+  async function toggleInterest(s, e) {
+    e.stopPropagation();
+    const sid = s.id;
+    if (interestLoading.has(sid)) return;
+    setInterestLoading(prev => new Set([...prev, sid]));
+    try {
+      if (myInterests.has(sid)) {
+        await db.remove(token, "training_interests",
+          `user_id=eq.${user.id}&scheduled_training_id=eq.${sid}`);
+        setMyInterests(prev => { const n = new Set(prev); n.delete(sid); return n; });
+      } else {
+        await db.insert(token, "training_interests", {
+          user_id:               user.id,
+          scheduled_training_id: sid,
+          training_id:           s.training_id,
+          name:                  user.displayName || user.name || null,
+          email:                 user.email       || null,
+          firma:                 user.firma       || null,
+          stanowisko:            user.stanowisko  || null,
+          phone:                 user.phone       || null,
+        });
+        setMyInterests(prev => new Set([...prev, sid]));
+      }
+    } catch(err) {
+      console.error("[ScheduleTab] toggleInterest error:", err);
+    } finally {
+      setInterestLoading(prev => { const n = new Set(prev); n.delete(sid); return n; });
+    }
+  }
 
   useEffect(() => {
     const thisYear = new Date().getFullYear();
@@ -269,48 +308,131 @@ export function ScheduleTab({ activeGroups }) {
           const barColor = isST ? "#8E44AD" : (grp?.color || C.green);
           const title = isST ? (s.custom_name || T.special_training_name) : t.title;
           const date = new Date(s.date + "T00:00:00");
+          const isOpen      = expandedCard === s.id;
+          const isInterested = myInterests.has(s.id);
+          const isToggling   = interestLoading.has(s.id);
 
           return (
             <div key={`${s.date}-${i}`} style={{
-              background:C.white,borderRadius:8,padding:"12px 14px",marginBottom:8,
+              background:C.white,borderRadius:8,marginBottom:8,
               boxShadow:"0 1px 3px rgba(0,0,0,.07)",
-              borderLeft:`4px solid ${barColor}`
+              borderLeft:`4px solid ${barColor}`,
+              overflow:"hidden",
             }}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                <span style={{fontSize:11,fontWeight:700,color:barColor}}>
-                  {T.days_full[date.getDay()]}, {date.getDate()} {T.months[date.getMonth()]} {date.getFullYear()}
-                </span>
-                <span style={{fontSize:10,background:C.greyBg,border:`1px solid ${C.grey}`,padding:"2px 8px",borderRadius:4,color:C.greyDk,fontWeight:600}}>
-                  8:30
-                </span>
-              </div>
-              <div style={{fontSize:13,fontWeight:700,color:C.black,lineHeight:1.3,marginBottom:4}}>{title}</div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:6,flexWrap:"wrap",marginTop:4}}>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {isST ? (
-                    <span style={{fontSize:9,fontWeight:700,color:"#8E44AD",background:"#F9F0FF",padding:"2px 7px"}}>⭐ ST</span>
+              {/* ── nagłówek karty (klikalny) ── */}
+              <div
+                onClick={() => setExpandedCard(isOpen ? null : s.id)}
+                style={{padding:"12px 14px",cursor:"pointer"}}
+              >
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{fontSize:11,fontWeight:700,color:barColor}}>
+                    {T.days_full[date.getDay()]}, {date.getDate()} {T.months[date.getMonth()]} {date.getFullYear()}
+                  </span>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:10,background:C.greyBg,border:`1px solid ${C.grey}`,padding:"2px 8px",borderRadius:4,color:C.greyDk,fontWeight:600}}>
+                      8:30
+                    </span>
+                    <span style={{fontSize:12,color:C.greyMid,lineHeight:1}}>{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </div>
+                <div style={{fontSize:13,fontWeight:700,color:C.black,lineHeight:1.3,marginBottom:4}}>{title}</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:6,flexWrap:"wrap",marginTop:4}}>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                    {isST ? (
+                      <span style={{fontSize:9,fontWeight:700,color:"#8E44AD",background:"#F9F0FF",padding:"2px 7px"}}>⭐ ST</span>
+                    ) : (
+                      <>
+                        <span style={{fontSize:9,fontWeight:700,color:grp?.color,background:`${grp?.color}18`,padding:"2px 7px"}}>{grp?.label}</span>
+                        <span style={{fontSize:9,color:C.greyMid,padding:"2px 4px"}}>{t.duration}</span>
+                        <span style={{fontSize:9,color:C.greyMid,padding:"2px 4px"}}>ID: {t.id}</span>
+                      </>
+                    )}
+                    {isInterested && (
+                      <span style={{fontSize:9,fontWeight:700,color:C.greenDk,background:C.greenBg,padding:"2px 7px",borderRadius:3}}>
+                        ✓ Zainteresowany
+                      </span>
+                    )}
+                  </div>
+                  {!isST ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); downloadICS(s, t); }}
+                      title="Dodaj do kalendarza (.ics)"
+                      style={{background:"#F0F7FF",border:"1px solid #0072C6",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0}}>
+                      📅
+                    </button>
                   ) : (
-                    <>
-                      <span style={{fontSize:9,fontWeight:700,color:grp?.color,background:`${grp?.color}18`,padding:"2px 7px"}}>{grp?.label}</span>
-                      <span style={{fontSize:9,color:C.greyMid,padding:"2px 4px"}}>{t.duration}</span>
-                      <span style={{fontSize:9,color:C.greyMid,padding:"2px 4px"}}>ID: {t.id}</span>
-                    </>
+                    <button
+                      onClick={e => { e.stopPropagation(); downloadICS(s, null); }}
+                      title="Dodaj do kalendarza (.ics)"
+                      style={{background:"#F9F0FF",border:"1px solid #8E44AD",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0}}>
+                      📅
+                    </button>
                   )}
                 </div>
-                {!isST ? (
-                  <button onClick={() => downloadICS(s, t)}
-                    title="Dodaj do kalendarza (.ics)"
-                    style={{background:"#F0F7FF",border:"1px solid #0072C6",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0}}>
-                    📅
-                  </button>
-                ) : (
-                  <button onClick={() => downloadICS(s, null)}
-                    title="Dodaj do kalendarza (.ics)"
-                    style={{background:"#F9F0FF",border:"1px solid #8E44AD",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0}}>
-                    📅
-                  </button>
-                )}
               </div>
+
+              {/* ── rozwinięty opis ── */}
+              {isOpen && !isST && t && (
+                <div style={{borderTop:`1px solid ${C.grey}`,padding:"14px 14px 16px"}}>
+                  {/* meta */}
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                    <span style={{fontSize:10,fontWeight:700,letterSpacing:1,color:C.greyMid}}>{t.category.toUpperCase()}</span>
+                    <span style={{fontSize:10,color:LVL_COLOR[t.level],fontWeight:700}}>● {LVL_LABEL[t.level]}</span>
+                  </div>
+                  {/* opis */}
+                  <p style={{fontSize:13,color:C.greyDk,lineHeight:1.7,margin:"0 0 16px"}}>{t.desc}</p>
+
+                  {/* checkbox zainteresowany */}
+                  <button
+                    onClick={e => toggleInterest(s, e)}
+                    disabled={isToggling}
+                    style={{
+                      display:"flex",alignItems:"center",gap:10,
+                      background: isInterested ? C.greenBg : C.greyBg,
+                      border:`1.5px solid ${isInterested ? C.green : C.grey}`,
+                      borderRadius:8,padding:"10px 14px",
+                      cursor:isToggling?"not-allowed":"pointer",
+                      width:"100%",
+                      opacity:isToggling?0.6:1,
+                      transition:"all .15s",
+                    }}
+                  >
+                    {/* custom checkbox */}
+                    <div style={{
+                      width:20,height:20,borderRadius:4,flexShrink:0,
+                      background: isInterested ? C.green : C.white,
+                      border:`2px solid ${isInterested ? C.green : C.greyMid}`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      transition:"all .15s",
+                    }}>
+                      {isInterested && (
+                        <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                          <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:isInterested?C.greenDk:C.black}}>
+                        {isToggling ? "…" : isInterested ? "Zainteresowany/a" : "Jestem zainteresowany/a"}
+                      </div>
+                      <div style={{fontSize:11,color:C.greyMid,marginTop:1}}>
+                        {isInterested
+                          ? "Kliknij, aby wycofać zgłoszenie"
+                          : "Powiadomimy trenera o Twoim zainteresowaniu"}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {/* ── rozwinięty opis szkolenia specjalnego (brak opisu w katalogu) ── */}
+              {isOpen && isST && (
+                <div style={{borderTop:`1px solid ${C.grey}`,padding:"12px 14px 14px"}}>
+                  <p style={{fontSize:12,color:C.greyMid,lineHeight:1.6,margin:0,fontStyle:"italic"}}>
+                    Szkolenie specjalne — szczegóły ustalone indywidualnie z trenerem.
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}

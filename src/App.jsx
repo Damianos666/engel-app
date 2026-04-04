@@ -344,6 +344,7 @@ function AppRoot({ onMounted }) {
         role:         profile?.role          || rawUser.role         || null,
         stanowisko:   profile?.stanowisko    || rawUser.stanowisko   || null,
         firma:        profile?.firma         || rawUser.firma        || null,
+        phone:        profile?.phone         || rawUser.phone        || null,
         active_groups: profile?.active_groups || rawUser.active_groups || ["tech","ur","maszyny"],
         notif_reminder: profile?.notif_reminder ?? rawUser.notif_reminder ?? true,
         notif_cert:     profile?.notif_cert     ?? rawUser.notif_cert     ?? true,

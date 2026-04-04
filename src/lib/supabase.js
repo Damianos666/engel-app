@@ -409,6 +409,83 @@ export const realtime = {
       if (ws) ws.close();
     };
   },
+
+  // Subskrypcja na INSERT w tabeli training_interests przez Supabase Realtime.
+  // Używane w AdminPanel — admin dostaje badge gdy pojawi się nowe zainteresowanie.
+  // Sygnatura identyczna jak onNewMessage — łatwa podmiana / rozszerzenie.
+  onNewInterest: (token, onInsert) => {
+    if (!SB_URL || !SB_ANON) return () => {};
+
+    const wsUrl = SB_URL.replace(/^https/, "wss").replace(/^http/, "ws");
+    const url   = `${wsUrl}/realtime/v1/websocket?apikey=${SB_ANON}&vsn=1.0.0`;
+
+    let ws      = null;
+    let hbTimer = null;
+    let closed  = false;
+    let ref     = 1;
+
+    function send(obj) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+    }
+
+    function join() {
+      send({
+        topic:   "realtime:public:training_interests",
+        event:   "phx_join",
+        payload: {
+          config: {
+            postgres_changes: [
+              { event: "INSERT", schema: "public", table: "training_interests" },
+              { event: "DELETE", schema: "public", table: "training_interests" },
+            ],
+          },
+          access_token: token,
+        },
+        ref: String(ref++),
+      });
+    }
+
+    function startHeartbeat() {
+      hbTimer = setInterval(() => {
+        send({ topic: "phoenix", event: "heartbeat", payload: {}, ref: String(ref++) });
+      }, 30_000);
+    }
+
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      return () => {};
+    }
+
+    ws.onopen = () => { join(); startHeartbeat(); };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (
+          msg.event === "postgres_changes" &&
+          (msg.payload?.data?.type === "INSERT" || msg.payload?.data?.type === "DELETE")
+        ) {
+          onInsert();
+        }
+      } catch {}
+    };
+
+    ws.onerror = () => {};
+
+    ws.onclose = () => {
+      clearInterval(hbTimer);
+      if (!closed) setTimeout(() => {
+        if (!closed) realtime.onNewInterest(token, onInsert);
+      }, 10_000);
+    };
+
+    return () => {
+      closed = true;
+      clearInterval(hbTimer);
+      if (ws) ws.close();
+    };
+  },
 };
 
 /* ─── RPC ────────────────────────────────────────────────────────────────── */

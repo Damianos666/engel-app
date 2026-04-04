@@ -16,6 +16,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
   const [editName,       setEditName]       = useState(user.displayName);
   const [editStanowisko, setEditStanowisko] = useState(user.stanowisko || "");
   const [editFirma,      setEditFirma]      = useState(user.firma || "");
+  const [editPhone,      setEditPhone]      = useState(user.phone || "");
   const [editing,   setEditing]   = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
@@ -27,17 +28,18 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
     const name       = editName.trim()       || user.name;
     const stanowisko = editStanowisko.trim() || null;
     const firma      = editFirma.trim()      || null;
+    const phone      = editPhone.trim()      || null;
     setSaving(true); setSaveErr("");
     try {
-      log("[SAVE PROFILE] updating user id:", user.id, { name, stanowisko, firma });
-      const res = await db.update(user.accessToken, "profiles", `id=eq.${user.id}`, { name, stanowisko, firma });
+      log("[SAVE PROFILE] updating user id:", user.id, { name, stanowisko, firma, phone });
+      const res = await db.update(user.accessToken, "profiles", `id=eq.${user.id}`, { name, stanowisko, firma, phone });
       log("[SAVE PROFILE] result:", res);
       if (!res || res.length === 0) {
         warn("[SAVE PROFILE] OSTRZEŻENIE: update zwrócił pustą tablicę — prawdopodobnie RLS blokuje UPDATE na tabeli users");
         setSaveErr(T.no_permission);
         return;
       }
-      setUser(p => ({...p, displayName:name, displayRole:stanowisko||"", stanowisko, firma:firma||"", name}));
+      setUser(p => ({...p, displayName:name, displayRole:stanowisko||"", stanowisko, firma:firma||"", name, phone}));
       setEditing(false); setSaved(true); setTimeout(() => setSaved(false), 2500);
     } catch(e) {
       logErr("[SAVE PROFILE] ERROR:", e.message);
@@ -70,6 +72,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
           <div style={{fontSize:18,fontWeight:700,color:C.black,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.displayName}</div>
           {subtitle && <div style={{fontSize:12,color:C.greyDk,marginTop:2}}>{subtitle}</div>}
           <div style={{fontSize:11,color:C.greyMid,marginTop:2}}>{user.email}</div>
+          {user.phone && <div style={{fontSize:11,color:C.greyMid,marginTop:1}}>📞 {user.phone}</div>}
           {saved && <div style={{fontSize:11,color:C.green,marginTop:3,fontWeight:600}}>✓ Zapisano zmiany</div>}
         </div>
         <button style={{background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}} onClick={() => { setEditing(true); setSaved(false); }}>Edytuj</button>
@@ -78,7 +81,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
       {editing && (
         <div style={{background:C.white,margin:"8px 12px 0",padding:20,boxShadow:"0 1px 3px rgba(0,0,0,.08)",borderTop:`3px solid ${C.green}`}}>
           <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:16,textTransform:"uppercase"}}>Edytuj dane</div>
-          {[[T.full_name,editName,setEditName,T.example_name],[T.position,editStanowisko,setEditStanowisko,T.optional],[T.company,editFirma,setEditFirma,T.optional]].map(([lbl,val,set,ph]) => (
+          {[[T.full_name,editName,setEditName,T.example_name],[T.position,editStanowisko,setEditStanowisko,T.optional],[T.company,editFirma,setEditFirma,T.optional],["Telefon (opcjonalnie)",editPhone,setEditPhone,"np. +48 600 000 000"]].map(([lbl,val,set,ph]) => (
             <div key={lbl} style={{marginBottom:16}}>
               <label style={{display:"block",fontSize:11,fontWeight:700,color:C.greyDk,marginBottom:6,letterSpacing:.5}}>{lbl}</label>
               <input style={{width:"100%",border:"none",borderBottom:`2px solid ${C.green}`,padding:"9px 0",fontSize:15,color:C.black,outline:"none",boxSizing:"border-box"}}
@@ -89,7 +92,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
           <div style={{fontSize:11,color:C.greyMid,marginBottom:16}}>{T.profile_note}</div>
           <div style={{display:"flex",gap:8}}>
             <button style={{flex:1,background:saving?C.greyDk:C.black,border:"none",color:C.white,padding:12,fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer"}} onClick={saveProfile} disabled={saving}>{saving?T.saving:T.save}</button>
-            <button style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:12,fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={() => { setEditing(false); setEditName(user.displayName); setEditStanowisko(user.stanowisko||""); setEditFirma(user.firma||""); setSaveErr(""); }}>{T.cancel}</button>
+            <button style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:12,fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={() => { setEditing(false); setEditName(user.displayName); setEditStanowisko(user.stanowisko||""); setEditFirma(user.firma||""); setEditPhone(user.phone||""); setSaveErr(""); }}>{T.cancel}</button>
           </div>
         </div>
       )}
