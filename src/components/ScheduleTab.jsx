@@ -53,24 +53,38 @@ export function ScheduleTab({ activeGroups }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
+      // 1. Szkolenia zaplanowane — jeśli to się nie uda, Terminarz jest pusty
       try {
-        const [schedData, interestData] = await Promise.all([
-          db.get(token, "scheduled_trainings", "order=date.asc"),
-          db.get(token, "training_interests", "select=scheduled_training_id,is_withdrawn"),
-        ]);
+        const schedData = await db.get(token, "scheduled_trainings", "order=date.asc");
         const all = Array.isArray(schedData) ? schedData : [];
         const todayStr = toISO(new Date());
         setScheduled(all.filter(s =>
           (s.end_date || s.date) >= todayStr && !s.is_hidden && !s.is_outgoing
         ));
-        if (Array.isArray(interestData)) {
-          setMyInterests(new Set(interestData.filter(r => !r.is_withdrawn).map(r => r.scheduled_training_id)));
+      } catch (err) {
+        console.error("[ScheduleTab] błąd pobierania szkoleń:", err);
+        setScheduled([]);
+      } finally {
+        setLoading(false);
+      }
+      // 2. Zainteresowania — niezależnie; błąd tutaj nie niszczy kalendarza
+      if (user?.id) {
+        try {
+          const interestData = await db.get(
+            token,
+            "training_interests",
+            `select=scheduled_training_id,is_withdrawn&user_id=eq.${user.id}`
+          );
+          if (Array.isArray(interestData)) {
+            setMyInterests(new Set(interestData.filter(r => !r.is_withdrawn).map(r => r.scheduled_training_id)));
+          }
+        } catch (err) {
+          console.warn("[ScheduleTab] nie można załadować zainteresowań (tabela może nie istnieć):", err);
         }
-      } catch { setScheduled([]); }
-      finally { setLoading(false); }
+      }
     }
     load();
-  }, [token]);
+  }, [token, user?.id]);
 
   async function toggleInterest(s, e) {
     e.stopPropagation();
