@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { C, GROUPS } from "../../lib/constants";
 import { TRAININGS } from "../../data/trainings";
-import { db } from "../../lib/supabase";
+import { db, realtime } from "../../lib/supabase";
 
-export function AdminInterested({ token }) {
+export function AdminInterested({ token, onContactedChange }) {
   const [interests,  setInterests]  = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState("");
@@ -28,6 +28,20 @@ export function AdminInterested({ token }) {
       }
     }
     load();
+    
+    // Auto-odświeżanie po nadejściu UPDATE/INSERT/DELETE z Supabase
+    const unsub = realtime.onNewInterest(token, () => {
+      // Pobieramy dane od nowa tłem bez setLoading(true) żeby nie migało
+      db.get(
+        token,
+        "training_interests",
+        "select=*,scheduled:scheduled_trainings(id,date,end_date,training_id,custom_name)&order=created_at.asc"
+      ).then(data => {
+        setInterests(Array.isArray(data) ? data : []);
+      }).catch(() => {});
+    });
+    
+    return () => unsub();
   }, [token]);
 
   async function toggleContacted(item) {
@@ -44,6 +58,8 @@ export function AdminInterested({ token }) {
           ? { ...i, contacted: newVal, contacted_at: newVal ? new Date().toISOString() : null }
           : i
       ));
+      // Powiadom AdminPanel o zmianie licznika (odświeży badge)
+      if (onContactedChange) onContactedChange();
     } catch(e) {
       console.error("[AdminInterested] toggleContacted error:", e);
     } finally {
@@ -200,6 +216,7 @@ export function AdminInterested({ token }) {
                         display:"flex",alignItems:"flex-start",gap:12,
                         background: isContacted ? "#FAFFF5" : C.white,
                         transition:"background .2s",
+                        opacity: item.is_withdrawn ? 0.6 : 1,
                       }}>
                         {/* inicjały */}
                         <div style={{
@@ -215,9 +232,12 @@ export function AdminInterested({ token }) {
 
                         {/* dane osoby */}
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:700,color:isContacted?C.greyDk:C.black,marginBottom:2}}>
+                          <div style={{fontSize:13,fontWeight:700,color:isContacted?C.greyDk:C.black,marginBottom:2,textDecoration:item.is_withdrawn?"line-through":"none"}}>
                             {item.name || "—"}
                           </div>
+                          {item.is_withdrawn && (
+                             <div style={{fontSize:10,background:C.greyBg,color:C.greyDk,display:"inline-block",padding:"2px 6px",borderRadius:4,fontWeight:700,marginBottom:4}}>Zrezygnował/a</div>
+                          )}
                           <div style={{fontSize:11,color:C.greyMid,marginBottom:1}}>{item.email || "—"}</div>
                           {(item.firma || item.stanowisko) && (
                             <div style={{fontSize:11,color:C.greyMid,marginBottom:1}}>

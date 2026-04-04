@@ -56,7 +56,7 @@ export function ScheduleTab({ activeGroups }) {
       try {
         const [schedData, interestData] = await Promise.all([
           db.get(token, "scheduled_trainings", "order=date.asc"),
-          db.get(token, "training_interests", "select=scheduled_training_id"),
+          db.get(token, "training_interests", "select=scheduled_training_id,is_withdrawn"),
         ]);
         const all = Array.isArray(schedData) ? schedData : [];
         const todayStr = toISO(new Date());
@@ -64,7 +64,7 @@ export function ScheduleTab({ activeGroups }) {
           (s.end_date || s.date) >= todayStr && !s.is_hidden && !s.is_outgoing
         ));
         if (Array.isArray(interestData)) {
-          setMyInterests(new Set(interestData.map(r => r.scheduled_training_id)));
+          setMyInterests(new Set(interestData.filter(r => !r.is_withdrawn).map(r => r.scheduled_training_id)));
         }
       } catch { setScheduled([]); }
       finally { setLoading(false); }
@@ -78,23 +78,24 @@ export function ScheduleTab({ activeGroups }) {
     if (interestLoading.has(sid)) return;
     setInterestLoading(prev => new Set([...prev, sid]));
     try {
-      if (myInterests.has(sid)) {
-        await db.remove(token, "training_interests",
-          `user_id=eq.${user.id}&scheduled_training_id=eq.${sid}`);
-        setMyInterests(prev => { const n = new Set(prev); n.delete(sid); return n; });
-      } else {
-        await db.insert(token, "training_interests", {
-          user_id:               user.id,
-          scheduled_training_id: sid,
-          training_id:           s.training_id,
-          name:                  user.displayName || user.name || null,
-          email:                 user.email       || null,
-          firma:                 user.firma       || null,
-          stanowisko:            user.stanowisko  || null,
-          phone:                 user.phone       || null,
-        });
-        setMyInterests(prev => new Set([...prev, sid]));
-      }
+      const withdrawing = myInterests.has(sid);
+      await db.upsert(token, "training_interests", {
+        user_id:               user.id,
+        scheduled_training_id: sid,
+        training_id:           s.training_id,
+        name:                  user.displayName || user.name || null,
+        email:                 user.email       || null,
+        firma:                 user.firma       || null,
+        stanowisko:            user.stanowisko  || null,
+        phone:                 user.phone       || null,
+        is_withdrawn:          withdrawing,
+      }, "user_id,scheduled_training_id");
+      
+      setMyInterests(prev => {
+        const n = new Set(prev);
+        if (withdrawing) n.delete(sid); else n.add(sid);
+        return n;
+      });
     } catch(err) {
       console.error("[ScheduleTab] toggleInterest error:", err);
     } finally {

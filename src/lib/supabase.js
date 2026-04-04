@@ -436,6 +436,7 @@ export const realtime = {
           config: {
             postgres_changes: [
               { event: "INSERT", schema: "public", table: "training_interests" },
+              { event: "UPDATE", schema: "public", table: "training_interests" },
               { event: "DELETE", schema: "public", table: "training_interests" },
             ],
           },
@@ -462,11 +463,12 @@ export const realtime = {
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (
-          msg.event === "postgres_changes" &&
-          (msg.payload?.data?.type === "INSERT" || msg.payload?.data?.type === "DELETE")
-        ) {
-          onInsert();
+        if (msg.event === "postgres_changes") {
+          const type = msg.payload?.data?.type || msg.payload?.type;
+          const record = msg.payload?.data?.record || msg.payload?.record;
+          if (type === "INSERT" || type === "DELETE" || type === "UPDATE") {
+            onInsert(type, record);
+          }
         }
       } catch {}
     };
