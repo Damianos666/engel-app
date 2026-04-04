@@ -32,10 +32,7 @@ export function AdminCodeGen({ defaultTrainer }) {
       const days     = mode === "special" ? specialDays : null;
       const data     = await edge.generateCode(token, short, selTrainer, mode === "special", specialTitle, days);
       // Append days to verifyUrl so the scanner can read it
-      let verifyUrl = data.verifyUrl || "";
-      if (mode === "special" && days && days > 1 && verifyUrl) {
-        verifyUrl += (verifyUrl.includes("?") ? "&" : "?") + `days=${days}`;
-      }
+      setResult(data);
       setResult({ ...data, verifyUrl });
       const QRCode = await import("qrcode");
       const dataUrl = await QRCode.default.toDataURL(verifyUrl, {

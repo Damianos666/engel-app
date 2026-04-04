@@ -289,11 +289,11 @@ export function GramTab({ onClose, onGoToMessages }) {
   /* ── Modal wrapper ── */
   const wrap = (content) => (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: "calc(12px + env(safe-area-inset-top, 0px))", paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))", paddingLeft: 12, paddingRight: 12, boxSizing: "border-box", fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif" }}
       onClick={onClose}
     >
       <div
-        style={{ background: "#EFEFEF", width: "100%", maxWidth: 390, maxHeight: "92dvh", borderRadius: 18, boxShadow: "0 32px 80px rgba(0,0,0,.5)", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{ background: "#EFEFEF", width: "100%", maxWidth: 390, maxHeight: "100%", borderRadius: 18, boxShadow: "0 32px 80px rgba(0,0,0,.5)", display: "flex", flexDirection: "column", overflow: "hidden" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

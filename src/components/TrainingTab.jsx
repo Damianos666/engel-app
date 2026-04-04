@@ -33,14 +33,8 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
   const [quizResult,  setQuizResult]  = useState(null);
   const [showScanner, setShowScanner] = useState(false);
 
-  // Okienko potwierdzenia — tylko dla kodów ST (uczestnik wpisuje nazwę)
-  const [confirm,     setConfirm]     = useState(null);
-  const [confirmDays, setConfirmDays] = useState("");
-  const [confirmName, setConfirmName] = useState("");
-
   const progress = calcProgress(completed, activeGroups);
 
-  // Memoizacja deduplication — przelicza się tylko gdy zmienia się completed
   const uniqueCompleted = useMemo(
     () => Object.values(
       completed.reduce((acc, c) => { acc[c.training.id] = c; return acc; }, {})
@@ -67,7 +61,6 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
   }
 
   async function verify() {
-    // Trigger quizu
     if (code.trim().toLowerCase() === "sprawdzam") {
       setCode(""); setStatus(null);
       setQuizMode("training"); setShowQuiz(true);
@@ -77,14 +70,9 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
     const raw = code.trim().toUpperCase().replace(/-/g, "");
     if (raw.length < 8) { setStatus("invalid"); return; }
 
-    // Kod ST — pokaż prosty modal potwierdzenia (tytuł nieznany przy ręcznym wpisaniu)
-    if (raw.startsWith("ST")) {
-      setConfirm({ rawCode: raw, isSpecial: true });
-      setConfirmDays("1");
-      return;
-    }
-
-    // Zwykły kod — od razu do edge function
+    // Wszystkie kody (w tym ST) weryfikowane bezpośrednio przez edge.
+    // Dla ST edge odczytuje tytuł i dni z tabeli special_training_meta
+    // zapisanej podczas generowania kodu przez trenera.
     setVerifying(true); setStatus(null);
     try {
       const result = await edge.verifyCode(user.accessToken, raw);
@@ -95,59 +83,6 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
       setVerifying(false);
     }
   }
-
-  async function submitConfirm() {
-    if (!confirm) return;
-    setVerifying(true);
-    try {
-      // Przy ręcznym wpisaniu ST tytuł nie jest znany — Edge Function użyje "Szkolenie specjalne"
-      const result = await edge.verifyCode(user.accessToken, confirm.rawCode);
-      handleSuccess(result, confirm.rawCode);
-      setConfirm(null); setConfirmDays("");
-    } catch (e) {
-      setStatus("invalid");
-      setConfirm(null);
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  function cancelConfirm() {
-    setConfirm(null);
-    setConfirmName("");
-    setConfirmDays("");
-  }
-
-  const canSubmit = !!confirm;
-
-  // Modal potwierdzenia — tylko dla kodów ST wpisanych ręcznie
-  const confirmModal = confirm && (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16,fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif"}}>
-      <div style={{background:C.white,width:"100%",maxWidth:380,borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,.35)",overflow:"hidden"}}>
-        <div style={{background:C.darkHdr,padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span style={{color:C.white,fontSize:13,fontWeight:700,letterSpacing:1}}>{T.special_training}</span>
-          <button onClick={() => { setConfirm(null); }}
-            style={{background:"none",border:"none",color:"#fff",fontSize:18,cursor:"pointer",opacity:.7}}>✕</button>
-        </div>
-        <div style={{height:3,background:C.green}}/>
-        <div style={{padding:20}}>
-          <div style={{background:C.greyBg,padding:"12px 14px",borderLeft:`3px solid ${C.amber}`,fontSize:13,color:C.greyDk,lineHeight:1.6}}>
-            ⭐ {T.special_training_hint}
-          </div>
-        </div>
-        <div style={{padding:"0 20px 20px",display:"flex",gap:10}}>
-          <button onClick={() => setConfirm(null)}
-            style={{flex:1,background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"11px 0",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:4}}>
-            {T.cancel}
-          </button>
-          <button onClick={submitConfirm} disabled={verifying}
-            style={{flex:2,background:C.green,border:"none",color:C.white,padding:"11px 0",fontSize:13,fontWeight:700,cursor:verifying?"not-allowed":"pointer",borderRadius:4}}>
-            {verifying ? T.verifying : T.confirm_btn}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   const codeInput = (
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -166,7 +101,6 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
           {verifying ? "..." : T.check}
         </button>
       </div>
-      {/* Przycisk skanera QR — tylko gdy urządzenie ma kamerę */}
       {hasCamera && (
         <button
           onClick={() => setShowScanner(true)}
@@ -179,12 +113,10 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
 
   if (loading) return <div style={{background:C.greyBg,flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
 
-  // Skaner QR — pełnoekranowa nakładka
   if (showScanner) return (
     <QRScannerTab
       token={user.accessToken}
       onComplete={result => {
-        // Wzbogać dane szkolenia z lokalnego TRAININGS (tytuł, kategoria, czas trwania)
         handleSuccess(result, result.key || "");
       }}
       onClose={() => setShowScanner(false)}
@@ -196,7 +128,6 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
       {showQuiz && quizMode === "custom"  && <GramTab onClose={() => setShowQuiz(false)}/>}
       {showQuiz && quizMode === "training" && <QuizGame token={user.accessToken} user={user} mode="training" onComplete={entry => { onComplete(entry); }} onClose={() => setShowQuiz(false)}/>}
       {celebEntry && <CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/>}
-      {confirmModal}
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100%",padding:"32px 24px 48px",textAlign:"center"}}>
         <ClipboardSvg/>
         <div style={{fontSize:18,fontWeight:600,color:C.black,marginTop:20,marginBottom:24}}>{T.enter_code}</div>
@@ -216,7 +147,6 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
       {celebEntry && <CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/>}
       {certEntry   && <CertModal       entry={certEntry}  user={user} onClose={() => setCertEntry(null)}/>}
       {quizResult  && <QuizResultModal entry={quizResult} onClose={() => setQuizResult(null)}/>}
-      {confirmModal}
       <div style={{background:C.white,margin:12,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,.07)"}}>
         <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:14,textTransform:"uppercase"}}>{T.enter_code}</div>
         {codeInput}
