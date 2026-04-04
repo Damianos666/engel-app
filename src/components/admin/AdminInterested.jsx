@@ -288,7 +288,7 @@ export function AdminInterested({ token, onContactedChange }) {
                           )}
                           {isContacted && contactedDate && (
                             <div style={{fontSize:10,color:C.greenDk,marginTop:3,fontWeight:600}}>
-                              ✓ Skontaktowano {contactedDate}
+                              ✓ Zapisano {contactedDate}
                             </div>
                           )}
                         </div>
