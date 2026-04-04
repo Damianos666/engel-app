@@ -8,7 +8,6 @@ export function AdminInterested({ token, onContactedChange }) {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState("");
   const [updatingId, setUpdatingId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null); // id kasowanego rekordu lub "group-{sid}"
 
   useEffect(() => {
     async function load() {
@@ -45,45 +44,6 @@ export function AdminInterested({ token, onContactedChange }) {
     return () => unsub();
   }, [token]);
 
-  // Automatyczne czyszczenie zgłoszeń dla miniónych szkoleń
-  useEffect(() => {
-    async function cleanupPastInterests() {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        // Pobierz ID szkoleń które się już odbyły
-        const past = await db.get(token, "scheduled_trainings",
-          `select=id&date=lt.${today}&end_date=is.null`);
-        const pastMulti = await db.get(token, "scheduled_trainings",
-          `select=id&end_date=lt.${today}`);
-        const ids = [
-          ...( Array.isArray(past)      ? past      : [] ),
-          ...( Array.isArray(pastMulti) ? pastMulti : [] ),
-        ].map(r => r.id);
-        const unique = [...new Set(ids)];
-        if (unique.length === 0) return;
-        await db.remove(token, "training_interests",
-          `scheduled_training_id=in.(${unique.join(",")})`);
-      } catch(e) {
-        console.warn("[AdminInterested] cleanup error:", e.message);
-      }
-    }
-    cleanupPastInterests();
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function deleteItem(item) {
-    if (!window.confirm(`Usunąć zgłoszenie od ${item.name || item.email || "tej osoby"}?`)) return;
-    setDeletingId(item.id);
-    try {
-      await db.remove(token, "training_interests", `id=eq.${item.id}`);
-      setInterests(prev => prev.filter(i => i.id !== item.id));
-      if (onContactedChange) onContactedChange();
-    } catch(e) {
-      alert("Błąd usuwania: " + e.message);
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
   async function toggleContacted(item) {
     if (updatingId === item.id) return;
     setUpdatingId(item.id);
@@ -98,6 +58,7 @@ export function AdminInterested({ token, onContactedChange }) {
           ? { ...i, contacted: newVal, contacted_at: newVal ? new Date().toISOString() : null }
           : i
       ));
+      // Powiadom AdminPanel o zmianie licznika (odświeży badge)
       if (onContactedChange) onContactedChange();
     } catch(e) {
       console.error("[AdminInterested] toggleContacted error:", e);
@@ -208,7 +169,7 @@ export function AdminInterested({ token, onContactedChange }) {
                 boxShadow:"0 1px 3px rgba(0,0,0,.07)",
                 overflow:"hidden",
               }}>
-                  {/* nagłówek szkolenia */}
+                {/* nagłówek szkolenia */}
                 <div style={{
                   borderLeft:`4px solid ${barColor}`,
                   padding:"12px 14px",
@@ -288,53 +249,33 @@ export function AdminInterested({ token, onContactedChange }) {
                           )}
                           {isContacted && contactedDate && (
                             <div style={{fontSize:10,color:C.greenDk,marginTop:3,fontWeight:600}}>
-                              ✓ Zapisano {contactedDate}
+                              ✓ Skontaktowano {contactedDate}
                             </div>
                           )}
                         </div>
 
-                        {/* przycisk skontaktowane + usuń */}
-                        <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignItems:"flex-end"}}>
-                          <button
-                            onClick={() => toggleContacted(item)}
-                            disabled={isUpdating}
-                            title={isContacted ? "Cofnij status" : "Oznacz jako skontaktowany"}
-                            style={{
-                              padding:"7px 12px",
-                              fontSize:11,
-                              fontWeight:700,
-                              border:`1.5px solid ${isContacted ? C.green : C.grey}`,
-                              borderRadius:6,
-                              background: isContacted ? C.green : C.white,
-                              color: isContacted ? C.white : C.greyMid,
-                              cursor:isUpdating ? "not-allowed" : "pointer",
-                              opacity:isUpdating ? 0.5 : 1,
-                              transition:"all .15s",
-                              whiteSpace:"nowrap",
-                            }}
-                          >
-                            {isUpdating ? "…" : isContacted ? "Zapisano" : "Skontaktowano"}
-                          </button>
-                          <button
-                            onClick={() => deleteItem(item)}
-                            disabled={deletingId === item.id}
-                            title="Usuń to zgłoszenie"
-                            style={{
-                              padding:"4px 8px",
-                              fontSize:10,
-                              fontWeight:700,
-                              border:`1px solid ${C.red}`,
-                              borderRadius:4,
-                              background:"none",
-                              color:C.red,
-                              cursor:deletingId === item.id ? "not-allowed" : "pointer",
-                              opacity:deletingId === item.id ? 0.5 : 1,
-                              whiteSpace:"nowrap",
-                            }}
-                          >
-                            {deletingId === item.id ? "…" : "🗑 Usuń"}
-                          </button>
-                        </div>
+                        {/* przycisk skontaktowane */}
+                        <button
+                          onClick={() => toggleContacted(item)}
+                          disabled={isUpdating}
+                          title={isContacted ? "Cofnij status" : "Oznacz jako skontaktowany"}
+                          style={{
+                            flexShrink:0,
+                            padding:"7px 12px",
+                            fontSize:11,
+                            fontWeight:700,
+                            border:`1.5px solid ${isContacted ? C.green : C.grey}`,
+                            borderRadius:6,
+                            background: isContacted ? C.green : C.white,
+                            color: isContacted ? C.white : C.greyMid,
+                            cursor:isUpdating ? "not-allowed" : "pointer",
+                            opacity:isUpdating ? 0.5 : 1,
+                            transition:"all .15s",
+                            whiteSpace:"nowrap",
+                          }}
+                        >
+                          {isUpdating ? "…" : isContacted ? "✓ OK" : "Skontaktuj"}
+                        </button>
                       </div>
                     );
                   })}
