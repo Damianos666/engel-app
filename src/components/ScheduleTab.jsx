@@ -4,6 +4,7 @@ import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
 import { useT } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
+import { useToast } from "../lib/ToastContext";
 import { fetchHolidaysForYear } from "../lib/holidays";
 
 function toISO(date) {
@@ -40,6 +41,7 @@ function downloadICS(s, t) {
 export function ScheduleTab({ activeGroups }) {
   const { token, user } = useUser();
   const T = useT();
+  const { addToast } = useToast();
   const [scheduled,       setScheduled]       = useState([]);
   const [loading,         setLoading]         = useState(true);
   const [selected,        setSelected]        = useState(null);
@@ -93,7 +95,7 @@ export function ScheduleTab({ activeGroups }) {
     setInterestLoading(prev => new Set([...prev, sid]));
     try {
       const withdrawing = myInterests.has(sid);
-      await db.upsert(token, "training_interests", {
+      const payload = {
         user_id:               user.id,
         scheduled_training_id: sid,
         training_id:           s.training_id,
@@ -103,8 +105,27 @@ export function ScheduleTab({ activeGroups }) {
         stanowisko:            user.stanowisko  || null,
         phone:                 user.phone       || null,
         is_withdrawn:          withdrawing,
-      }, "user_id,scheduled_training_id");
-      
+      };
+
+      // Próba INSERT — jesli rekord juz istnieje (23505), to tylko UPDATE is_withdrawn
+      try {
+        await db.insert(token, "training_interests", payload);
+      } catch(insertErr) {
+        const msg = insertErr?.message || "";
+        // duplicate key / unique violation — rekord juz istnieje, robimy UPDATE
+        if (msg.includes("23505") || msg.includes("duplicate") || msg.includes("unique")) {
+          await db.update(
+            token,
+            "training_interests",
+            `user_id=eq.${user.id}&scheduled_training_id=eq.${sid}`,
+            { is_withdrawn: withdrawing, name: payload.name, email: payload.email,
+              firma: payload.firma, stanowisko: payload.stanowisko, phone: payload.phone }
+          );
+        } else {
+          throw insertErr; // inny błąd — propaguj do zewnętrznego catch
+        }
+      }
+
       setMyInterests(prev => {
         const n = new Set(prev);
         if (withdrawing) n.delete(sid); else n.add(sid);
@@ -112,6 +133,7 @@ export function ScheduleTab({ activeGroups }) {
       });
     } catch(err) {
       console.error("[ScheduleTab] toggleInterest error:", err);
+      addToast("Błąd zapisu zainteresowania: " + (err?.message || err));
     } finally {
       setInterestLoading(prev => { const n = new Set(prev); n.delete(sid); return n; });
     }
