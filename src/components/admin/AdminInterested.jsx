@@ -3,7 +3,7 @@ import { C, GROUPS } from "../../lib/constants";
 import { TRAININGS } from "../../data/trainings";
 import { db } from "../../lib/supabase";
 
-export function AdminInterested({ token, onContactedChange }) {
+export function AdminInterested({ token }) {
   const [interests,  setInterests]  = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState("");
@@ -44,8 +44,6 @@ export function AdminInterested({ token, onContactedChange }) {
           ? { ...i, contacted: newVal, contacted_at: newVal ? new Date().toISOString() : null }
           : i
       ));
-      // Powiadom AdminPanel o zmianie licznika (odświeży badge)
-      if (onContactedChange) onContactedChange();
     } catch(e) {
       console.error("[AdminInterested] toggleContacted error:", e);
     } finally {
