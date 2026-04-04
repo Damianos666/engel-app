@@ -1,11 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { C, GROUPS } from "../../lib/constants";
-import { db, realtime } from "../../lib/supabase";
 import { AdminMessages } from "./AdminMessages";
 import { AdminTrainings } from "./AdminTrainings";
 import { AdminSchedule } from "./AdminSchedule";
 import { AdminBatchComplete } from "./AdminBatchComplete";
-import { AdminInterested } from "./AdminInterested";
 import { ScheduleTab } from "../ScheduleTab";
 
 const LOGO_URL = "/logo.png";
@@ -16,7 +14,6 @@ const ADMIN_TABS = [
   ["Wiadomości",     "✉"],
   ["Edytor szkoleń", "📋"],
   ["Zaliczenia",     "🎓"],
-  ["Zgłoszenia",     "🙋"],
 ];
 
 const tabVisible = { display:"flex", flexDirection:"column", height:"100%", overflowY:"auto", WebkitOverflowScrolling:"touch" };
@@ -35,57 +32,14 @@ function useIsDesktop() {
 }
 
 export function AdminPanel({ user, onLogout }) {
-  const [tab,             setTab]             = useState(0);
-  const [interestedCount, setInterestedCount] = useState(0);
+  const [tab, setTab] = useState(0);
   const isDesktop = useIsDesktop();
-  const realtimeUnsub  = useRef(null);
-  const lastInterestAt = useRef(null); // ref do wykrywania nowych, nie widzianych wczeIniej
 
+  // Zabezpieczenie: jeśli user nie dotarł jeszcze przez props (np. lazy load race),
+  // nie renderuj zawartości — React spróbuje ponownie gdy user będzie dostępny.
   if (!user) return null;
 
   const token = user.accessToken;
-
-  // Wzorzec identyczny jak checkMessages w App.jsx —
-  // pobiera dane z bazy, porównuje timestampy, WTEDY odpala Notification.
-  // Notification odpalana z async funkcji (nie bezpoArednio z WS handler).
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const checkInterests = useCallback(async (tok) => {
-    try {
-      const data = await db.get(tok, "training_interests",
-        "select=id,created_at,name,email,contacted&order=created_at.desc&limit=20"
-      );
-      if (!Array.isArray(data)) return;
-      const nonContacted = data.filter(i => !i.contacted);
-      setInterestedCount(nonContacted.length);
-      if (!data.length) return;
-      const newestAt = data[0].created_at;
-      if (lastInterestAt.current && newestAt > lastInterestAt.current) {
-        const newOnes = data.filter(i => i.created_at > lastInterestAt.current);
-        if ("Notification" in window && Notification.permission === "granted") {
-          newOnes.forEach(item => {
-            new Notification("🙋 ENGEL Expert Academy", {
-              body: `Nowe zgłoszenie: ${item.name || item.email || "Ktoś jest zainteresowany"}`,
-              icon: "/pwa-192.png", badge: "/pwa-192.png",
-              tag: `interest-${item.id}`, renotify: true,
-            });
-          });
-        }
-      }
-      lastInterestAt.current = newestAt;
-    } catch { /* cicho ignoruj */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    checkInterests(token);
-    // Realtime — wywołuje checkInterests (jak onNewMessage wywołuje checkMessages)
-    realtimeUnsub.current = realtime.onNewInterest(token, () => {
-      checkInterests(token);
-    });
-    return () => {
-      if (realtimeUnsub.current) { realtimeUnsub.current(); realtimeUnsub.current = null; }
-    };
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div
@@ -160,20 +114,8 @@ export function AdminPanel({ user, onLogout }) {
               alignItems: "center",
               gap: 3,
               cursor: "pointer",
-              position: "relative",
             }}
           >
-            {/* badge dla Zainteresowani (index 5) */}
-            {i === 5 && interestedCount > 0 && (
-              <div style={{
-                position: "absolute", top: 4, right: "calc(50% - 14px)",
-                background: C.red, color: C.white, borderRadius: "50%",
-                width: 15, height: 15, fontSize: 8, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {interestedCount}
-              </div>
-            )}
             <span style={{ fontSize: 16, color: tab === i ? C.black : C.greyMid }}>{icon}</span>
             <span style={{ fontSize: 9, fontWeight: 700, color: tab === i ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
               {label}
@@ -192,22 +134,9 @@ export function AdminPanel({ user, onLogout }) {
                 key={i}
                 onClick={() => setTab(i)}
                 className={`admin-sidebar-btn${tab === i ? " active" : ""}`}
-                style={{ position: "relative" }}
               >
                 <span className="tab-icon">{icon}</span>
                 <span>{label}</span>
-                {/* badge dla Zainteresowani (index 5) */}
-                {i === 5 && interestedCount > 0 && (
-                  <div style={{
-                    marginLeft: "auto",
-                    background: C.red, color: C.white, borderRadius: "50%",
-                    minWidth: 18, height: 18, fontSize: 10, fontWeight: 700,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    padding: "0 3px", flexShrink: 0,
-                  }}>
-                    {interestedCount}
-                  </div>
-                )}
               </button>
             ))}
           </nav>
@@ -217,7 +146,6 @@ export function AdminPanel({ user, onLogout }) {
             <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
             <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
             <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-            <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => fetchInterestedCount(token)}/></div>
           </div>
         </div>
       ) : (
@@ -228,7 +156,6 @@ export function AdminPanel({ user, onLogout }) {
           <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
           <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
           <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-          <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => fetchInterestedCount(token)}/></div>
         </div>
       )}
     </div>

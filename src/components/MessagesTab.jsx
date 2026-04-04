@@ -604,7 +604,6 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
   const userMail  = user?.email       || "";
   const userRole  = user?.role        || "";
   const userFirma = user?.firma       || "";
-  const userPhone = user?.phone       || "";
   // Bieżąca data — aktualizuje się gdy użytkownik wraca do app po północy.
   // Zmiana tej wartości wymusza przeładowanie TipBanner i WeeklyQuizBanner.
   const [currentDate, setCurrentDate] = useState(toISO());
@@ -902,7 +901,7 @@ export function MessagesTab({ onTipConfirmed, onMarkRead, readIds = new Set(), m
                   "\nStanowisko: " + userRole +
                   "\nFirma: " + userFirma +
                   "\nAdres e-mail: " + userMail +
-                  "\nTelefon kontaktowy: " + userPhone + "\n\nProsze o kontakt.\n\nZ powazaniem,\n" + userName
+                  "\nTelefon kontaktowy: \n\nProsze o kontakt.\n\nZ powazaniem,\n" + userName
                 );
                 setContactOpen(false);
                 window.location.href = "mailto:" + CONTACT_EMAIL + "?subject=" + subject + "&body=" + body;
