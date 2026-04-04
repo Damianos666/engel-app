@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C, GROUPS } from "../../lib/constants";
 import { db, realtime } from "../../lib/supabase";
 import { AdminMessages } from "./AdminMessages";
@@ -38,49 +38,35 @@ export function AdminPanel({ user, onLogout }) {
   const [tab,             setTab]             = useState(0);
   const [interestedCount, setInterestedCount] = useState(0);
   const isDesktop = useIsDesktop();
-  const realtimeUnsub  = useRef(null);
-  const lastInterestAt = useRef(null); // ref do wykrywania nowych, nie widzianych wczeIniej
+  const realtimeUnsub = useRef(null);
 
   if (!user) return null;
 
   const token = user.accessToken;
 
-  // Wzorzec identyczny jak checkMessages w App.jsx —
-  // pobiera dane z bazy, porównuje timestampy, WTEDY odpala Notification.
-  // Notification odpalana z async funkcji (nie bezpoArednio z WS handler).
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const checkInterests = useCallback(async (tok) => {
+  // Pobiera liczbę nieskontaktowanych zainteresowań
+  async function fetchInterestedCount(tok) {
     try {
-      const data = await db.get(tok, "training_interests",
-        "select=id,created_at,name,email,contacted&order=created_at.desc&limit=20"
-      );
-      if (!Array.isArray(data)) return;
-      const nonContacted = data.filter(i => !i.contacted);
-      setInterestedCount(nonContacted.length);
-      if (!data.length) return;
-      const newestAt = data[0].created_at;
-      if (lastInterestAt.current && newestAt > lastInterestAt.current) {
-        const newOnes = data.filter(i => i.created_at > lastInterestAt.current);
-        if ("Notification" in window && Notification.permission === "granted") {
-          newOnes.forEach(item => {
-            new Notification("🙋 ENGEL Expert Academy", {
-              body: `Nowe zgłoszenie: ${item.name || item.email || "Ktoś jest zainteresowany"}`,
-              icon: "/pwa-192.png", badge: "/pwa-192.png",
-              tag: `interest-${item.id}`, renotify: true,
-            });
-          });
-        }
-      }
-      lastInterestAt.current = newestAt;
+      const data = await db.get(tok, "training_interests", "select=id&contacted=eq.false");
+      setInterestedCount(Array.isArray(data) ? data.length : 0);
     } catch { /* cicho ignoruj */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    checkInterests(token);
-    // Realtime — wywołuje checkInterests (jak onNewMessage wywołuje checkMessages)
-    realtimeUnsub.current = realtime.onNewInterest(token, () => {
-      checkInterests(token);
+    fetchInterestedCount(token);
+    // Realtime — natychmiastowe powiadomienie gdy pojawi się nowe zainteresowanie
+    realtimeUnsub.current = realtime.onNewInterest(token, (type, record) => {
+      fetchInterestedCount(token);
+      if (type === "INSERT") {
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("🙋 ENGEL Expert Academy", {
+            body: `Masz nowe zgłoszenie na szkolenie!`,
+            icon: "/pwa-192.png", badge: "/pwa-192.png",
+            vibrate: [200, 100, 200],
+          });
+        }
+      }
     });
     return () => {
       if (realtimeUnsub.current) { realtimeUnsub.current(); realtimeUnsub.current = null; }
