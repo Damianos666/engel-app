@@ -133,6 +133,7 @@ function AppRoot({ onMounted }) {
   const [activeGroups,      setActiveGroups]    = useState(["tech","ur","maszyny"]);
   const [notifReminder,     setNotifReminder]   = useState(true);
   const [notifCert,         setNotifCert]       = useState(true);
+  const [showNotifBanner,   setShowNotifBanner] = useState(false);
   const [dataLoading,       setDataLoading]     = useState(false);
   const [msgCount,          setMsgCount]        = useState(0);
   const [readIds,           setReadIds]         = useState(new Set());
@@ -166,8 +167,17 @@ function AppRoot({ onMounted }) {
 
   function requestNotifPermission() {
     if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+      // Nie pytaj w tle — Chrome/Edge blokuje automatyczne requesty.
+      // Zamiast tego pokaż baner który inicjuje request z akcji użytkownika.
+      setShowNotifBanner(true);
     }
+  }
+
+  async function handleNotifAllow() {
+    setShowNotifBanner(false);
+    try {
+      await Notification.requestPermission();
+    } catch {}
   }
 
   const checkMessages = useCallback(async (token, userId) => {
@@ -469,6 +479,36 @@ function AppRoot({ onMounted }) {
 
   return (
     <UserContext.Provider value={userContextValue}>
+      {/* Baner z prośbą o zgodę na powiadomienia — pojawia się raz po zalogowaniu */}
+      {showNotifBanner && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 99999,
+          background: "#1A1A1A", borderBottom: "3px solid #639922",
+          padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+          fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
+          boxShadow: "0 2px 12px rgba(0,0,0,.4)",
+        }}>
+          <span style={{ fontSize: 22, flexShrink: 0 }}>🔔</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF", marginBottom: 2 }}>
+              Włącz powiadomienia
+            </div>
+            <div style={{ fontSize: 11, color: "#A0A0A0", lineHeight: 1.4 }}>
+              Otrzymuj natychmiastowe alerty gdy admin wyśle wiadomość
+            </div>
+          </div>
+          <button
+            onClick={handleNotifAllow}
+            style={{ background: "#639922", border: "none", color: "#fff", padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: "pointer", flexShrink: 0 }}>
+            Zezwól
+          </button>
+          <button
+            onClick={() => setShowNotifBanner(false)}
+            style={{ background: "none", border: "none", color: "#666", fontSize: 20, cursor: "pointer", flexShrink: 0, lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
+      )}
       {isAdmin ? (
         <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
           <AdminPanel user={user} onLogout={handleLogout}/>
