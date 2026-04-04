@@ -50,6 +50,7 @@ export function ScheduleTab({ activeGroups }) {
   const [holidays,        setHolidays]        = useState({});
   const [expandedCard,    setExpandedCard]    = useState(null);
   const [myInterests,     setMyInterests]     = useState(new Set());
+  const [myContacted,     setMyContacted]     = useState(new Set()); // sid gdzie admin oznaczył contacted=true
   const [interestLoading, setInterestLoading] = useState(new Set());
 
   useEffect(() => {
@@ -75,10 +76,11 @@ export function ScheduleTab({ activeGroups }) {
           const interestData = await db.get(
             token,
             "training_interests",
-            `select=scheduled_training_id,is_withdrawn&user_id=eq.${user.id}`
+            `select=scheduled_training_id,is_withdrawn,contacted&user_id=eq.${user.id}`
           );
           if (Array.isArray(interestData)) {
             setMyInterests(new Set(interestData.filter(r => !r.is_withdrawn).map(r => r.scheduled_training_id)));
+            setMyContacted(new Set(interestData.filter(r => r.contacted).map(r => r.scheduled_training_id)));
           }
         } catch (err) {
           console.warn("[ScheduleTab] nie można załadować zainteresowań (tabela może nie istnieć):", err);
@@ -345,8 +347,9 @@ export function ScheduleTab({ activeGroups }) {
           const barColor = isST ? "#8E44AD" : (grp?.color || C.green);
           const title = isST ? (s.custom_name || T.special_training_name) : t.title;
           const date = new Date(s.date + "T00:00:00");
-          const isOpen      = expandedCard === s.id;
-          const isInterested = myInterests.has(s.id);
+          const isOpen       = expandedCard === s.id;
+          const isContacted  = myContacted.has(s.id);  // admin już skontaktował
+          const isInterested = myInterests.has(s.id) && !isContacted; // zainteresowany ale jeszcze nie skontaktowany
           const isToggling   = interestLoading.has(s.id);
 
           return (
@@ -384,7 +387,12 @@ export function ScheduleTab({ activeGroups }) {
                         <span style={{fontSize:9,color:C.greyMid,padding:"2px 4px"}}>ID: {t.id}</span>
                       </>
                     )}
-                    {isInterested && (
+                    {isContacted && (
+                      <span style={{fontSize:9,fontWeight:700,color:"#1a7a3f",background:"#D4EDDA",padding:"2px 7px",borderRadius:3}}>
+                        ✓ Zapisany
+                      </span>
+                    )}
+                    {isInterested && !isContacted && (
                       <span style={{fontSize:9,fontWeight:700,color:C.greenDk,background:C.greenBg,padding:"2px 7px",borderRadius:3}}>
                         ✓ Zainteresowany
                       </span>
@@ -419,7 +427,28 @@ export function ScheduleTab({ activeGroups }) {
                   {/* opis */}
                   <p style={{fontSize:13,color:C.greyDk,lineHeight:1.7,margin:"0 0 16px"}}>{t.desc}</p>
 
-                  {/* checkbox zainteresowany */}
+                  {/* checkbox zainteresowany — ukryty gdy admin juz skontaktowal */}
+                  {isContacted ? (
+                    <div style={{
+                      display:"flex",alignItems:"center",gap:10,
+                      background:"#D4EDDA",border:"1.5px solid #1a7a3f",
+                      borderRadius:8,padding:"10px 14px",
+                    }}>
+                      <div style={{
+                        width:20,height:20,borderRadius:4,flexShrink:0,
+                        background:"#1a7a3f",
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                      }}>
+                        <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                          <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div style={{textAlign:"left"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:"#1a7a3f"}}>Zapisany/a na szkolenie</div>
+                        <div style={{fontSize:11,color:"#2d9e5f",marginTop:1}}>Trener potwierdził Twoje zgłoszenie</div>
+                      </div>
+                    </div>
+                  ) : (
                   <button
                     onClick={e => toggleInterest(s, e)}
                     disabled={isToggling}
@@ -459,6 +488,7 @@ export function ScheduleTab({ activeGroups }) {
                       </div>
                     </div>
                   </button>
+                  )}
                 </div>
               )}
 
