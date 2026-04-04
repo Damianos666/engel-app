@@ -45,6 +45,31 @@ export function AdminInterested({ token, onContactedChange }) {
     return () => unsub();
   }, [token]);
 
+  // Automatyczne czyszczenie zgłoszeń dla miniónych szkoleń
+  useEffect(() => {
+    async function cleanupPastInterests() {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        // Pobierz ID szkoleń które się już odbyły
+        const past = await db.get(token, "scheduled_trainings",
+          `select=id&date=lt.${today}&end_date=is.null`);
+        const pastMulti = await db.get(token, "scheduled_trainings",
+          `select=id&end_date=lt.${today}`);
+        const ids = [
+          ...( Array.isArray(past)      ? past      : [] ),
+          ...( Array.isArray(pastMulti) ? pastMulti : [] ),
+        ].map(r => r.id);
+        const unique = [...new Set(ids)];
+        if (unique.length === 0) return;
+        await db.remove(token, "training_interests",
+          `scheduled_training_id=in.(${unique.join(",")})`);
+      } catch(e) {
+        console.warn("[AdminInterested] cleanup error:", e.message);
+      }
+    }
+    cleanupPastInterests();
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function deleteItem(item) {
     if (!window.confirm(`Usunąć zgłoszenie od ${item.name || item.email || "tej osoby"}?`)) return;
     setDeletingId(item.id);
@@ -288,7 +313,7 @@ export function AdminInterested({ token, onContactedChange }) {
                               whiteSpace:"nowrap",
                             }}
                           >
-                            {isUpdating ? "…" : isContacted ? "✓ OK" : "Skontaktuj"}
+                            {isUpdating ? "…" : isContacted ? "Zapisano" : "Skontaktowano"}
                           </button>
                           <button
                             onClick={() => deleteItem(item)}
