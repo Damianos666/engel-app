@@ -25,6 +25,10 @@ export const authHeaders = (token) => ({
 //   Dzięki temu użytkownik bez "zapamiętaj" NIE jest wylogowywany po 1h
 //   (access_token wygasa, ale RAM-owy refreshToken pozwala go odświeżyć).
 const SESSION_KEY = "eea_session";
+// OPTYMALIZACJA: rola zapisywana osobno — main.jsx czyta ją PRZED zamontowaniem
+// React i startuje preload właściwych chunków równolegle z session restore.
+// Wartości: "admin" | "trainer" | "client"
+const ROLE_KEY = "eea_role";
 let _memoryToken        = null;
 let _memoryRefreshToken = null;
 let _memoryUser         = null;
@@ -40,6 +44,19 @@ export const session = {
       } catch {}
     }
   },
+  // Wywoływane po handleLogin gdy znamy już profil użytkownika.
+  // Zapisuje rolę tylko gdy sesja jest persisted (zapamiętaj mnie),
+  // bo tylko wtedy preload przy kolejnym uruchomieniu ma sens.
+  saveRole: (role, trainerId) => {
+    try {
+      if (!localStorage.getItem(SESSION_KEY)) return; // sesja nie jest persisted — nie zapisuj
+      const r = role === "admin" ? "admin" : trainerId ? "trainer" : "client";
+      localStorage.setItem(ROLE_KEY, r);
+    } catch {}
+  },
+  loadRole: () => {
+    try { return localStorage.getItem(ROLE_KEY); } catch { return null; }
+  },
   load: () => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
@@ -54,6 +71,7 @@ export const session = {
     _memoryRefreshToken = null;
     _memoryUser         = null;
     try { localStorage.removeItem(SESSION_KEY); } catch {}
+    try { localStorage.removeItem(ROLE_KEY); }   catch {}
   },
   getToken: () => _memoryToken,
   setToken: (t) => { _memoryToken = t; },
@@ -132,11 +150,24 @@ export const auth = {
   },
 
   recover: async (email) => {
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
     const r = await fetchWithTimeout(`${SB_URL}/auth/v1/recover`, {
       method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, redirectTo: appUrl }),
     }, AUTH_TIMEOUT_MS);
     if (!r.ok) { const d = await r.json(); throw new Error(d.msg || "Błąd"); }
+  },
+
+  // Ustawienie nowego hasła — wywołane z tokenem z linku recovery
+  updatePassword: async (accessToken, newPassword) => {
+    const r = await fetchWithTimeout(`${SB_URL}/auth/v1/user`, {
+      method: "PUT",
+      headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
+      body: JSON.stringify({ password: newPassword }),
+    }, AUTH_TIMEOUT_MS);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.msg || d.message || "Błąd zmiany hasła");
+    return d;
   },
 };
 

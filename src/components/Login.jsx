@@ -1,6 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { C } from "../lib/constants";
 import { auth, db, session } from "../lib/supabase";
+
+/* ─── Parsowanie hash params z linku Supabase (recovery, magic link itp.) ── */
+export function parseHashParams() {
+  try {
+    const hash = window.location.hash.slice(1); // usuń '#'
+    if (!hash) return null;
+    const params = Object.fromEntries(new URLSearchParams(hash));
+    if (params.type && params.access_token) return params;
+    return null;
+  } catch { return null; }
+}
+
+export function clearHashFromUrl() {
+  // Usuń hash z URL bez przeładowania strony
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+}
 import { generateLogin } from "../lib/helpers";
 import { ClipboardSvg, Field, Header } from "./SharedUI";
 import { useT, useLang } from "../lib/LangContext";
@@ -227,6 +243,70 @@ export function AuthForm({ mode, setMode, onLogin }) {
         )}
       </div>
     </>
+  );
+}
+
+/* ─── RESET PASSWORD FORM (po kliknięciu linku z maila) ─────────────────── */
+export function ResetPasswordForm({ accessToken, onDone }) {
+  const [pass,    setPass]    = useState("");
+  const [pass2,   setPass2]   = useState("");
+  const [err,     setErr]     = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done,    setDone]    = useState(false);
+
+  async function save() {
+    if (!pass || !pass2) { setErr("Wypełnij oba pola."); return; }
+    if (pass.length < 8)  { setErr("Hasło musi mieć co najmniej 8 znaków."); return; }
+    if (pass !== pass2)   { setErr("Hasła nie są identyczne."); return; }
+    setLoading(true); setErr("");
+    try {
+      await auth.updatePassword(accessToken, pass);
+      setDone(true);
+      setTimeout(() => onDone(), 2500);
+    } catch(e) {
+      setErr(e.message || "Błąd zmiany hasła. Spróbuj ponownie.");
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="app-container" style={{height:"100%",display:"flex",flexDirection:"column",fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif",overflow:"hidden",background:"#EFEFEF"}}>
+      <Header/>
+      <div style={{background:"#E8EAEC",borderBottom:"1px solid #D0D3D6",padding:"11px 20px",textAlign:"center"}}>
+        <strong style={{display:"block",fontSize:15,color:"#1A1A1A",marginBottom:2}}>ENGEL Expert Academy</strong>
+        <span style={{fontSize:13,color:"#686868"}}>Resetowanie hasła</span>
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 24px 40px",overflowY:"auto"}}>
+        <div style={{width:"100%",maxWidth:340}}>
+          {done ? (
+            <div style={{background:"#fff",padding:24,boxShadow:"0 1px 6px rgba(0,0,0,.1)",textAlign:"center"}}>
+              <div style={{fontSize:40,marginBottom:12}}>✅</div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:8}}>Hasło zostało zmienione</div>
+              <div style={{fontSize:13,color:"#686868",lineHeight:1.6}}>Za chwilę zostaniesz przekierowany do logowania…</div>
+            </div>
+          ) : (
+            <div style={{background:"#fff",padding:24,boxShadow:"0 1px 6px rgba(0,0,0,.1)"}}>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>Ustaw nowe hasło</div>
+              <div style={{fontSize:13,color:"#686868",marginBottom:20,lineHeight:1.5}}>
+                Wpisz nowe hasło do swojego konta ENGEL Expert Academy.
+              </div>
+              <Field label="NOWE HASŁO" type="password" value={pass}
+                onChange={v => { setPass(v); setErr(""); }}
+                placeholder="min. 8 znaków" autoComplete="new-password"/>
+              <Field label="POWTÓRZ HASŁO" type="password" value={pass2}
+                onChange={v => { setPass2(v); setErr(""); }}
+                placeholder="••••••••" autoComplete="new-password"/>
+              {err && <div style={{color:"#C0392B",fontSize:12,marginBottom:12}}>{err}</div>}
+              <button
+                style={{width:"100%",background:loading?"#686868":"#1A1A1A",border:"none",color:"#fff",
+                        padding:14,fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer"}}
+                onClick={save} disabled={loading}>
+                {loading ? "Zapisuję…" : "Zapisz nowe hasło"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

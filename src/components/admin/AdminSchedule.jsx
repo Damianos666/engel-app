@@ -47,7 +47,7 @@ function addDays(isoDate, n) {
   return toISO(d);
 }
 
-export function AdminSchedule({ token }) {
+export function AdminSchedule({ token, refreshKey }) {
   const { addToast } = useToast();
   const now = new Date();
   const [scheduled,    setScheduled]    = useState([]);
@@ -178,7 +178,7 @@ export function AdminSchedule({ token }) {
     timelineRef.current.scrollLeft = Math.max(0, left - timelineRef.current.clientWidth / 2);
   }, [cellW, tlOrigin]);
 
-  useEffect(() => { loadScheduled(); }, []);
+  useEffect(() => { loadScheduled(); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const y = now.getFullYear();
@@ -821,55 +821,57 @@ export function AdminSchedule({ token }) {
             />
           </div>
 
-          {/* HIDDEN + WYJAZDOWE + LICZBA UCZESTNIKÓW — jeden wiersz */}
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}
+          {/* WIERSZ 1: 🔒 ✈️ + liczba uczest. (lewa) | Anuluj + Zapisz (prawa) */}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* lewa strona */}
+            <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}
               title="Ukryte — niewidoczne dla klientów">
               <input type="checkbox" checked={isHidden}
                 onChange={e => { setIsHidden(e.target.checked); if (e.target.checked) setIsOutgoing(false); }}
                 style={{width:16,height:16,cursor:"pointer",accentColor:C.amber}}/>
               <span style={{fontSize:16}}>🔒</span>
             </label>
-            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}
+            <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}
               title="Wyjazdowe — widoczne tylko dla trenerów">
               <input type="checkbox" checked={isOutgoing}
                 onChange={e => { setIsOutgoing(e.target.checked); if (e.target.checked) setIsHidden(false); }}
                 style={{width:16,height:16,cursor:"pointer",accentColor:"#2980B9"}}/>
               <span style={{fontSize:16}}>✈️</span>
             </label>
-            <div style={{flex:1}}/>
-            <span style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,textTransform:"uppercase"}}>Liczba uczest.</span>
+            <span style={{fontSize:11,fontWeight:700,color:C.greyMid,letterSpacing:1,marginLeft:6}}>👥</span>
             <input
               type="number" min="0" max="999" value={partCount}
               onChange={e=>setPartCount(e.target.value)}
               placeholder="—"
-              style={{width:64,padding:"8px 10px",border:`1.5px solid ${C.grey}`,borderRadius:6,fontSize:14,fontWeight:700,color:C.black,background:C.white,textAlign:"center",outline:"none"}}
+              style={{width:56,padding:"6px 8px",border:`1.5px solid ${C.grey}`,borderRadius:6,fontSize:14,fontWeight:700,color:C.black,background:C.white,textAlign:"center",outline:"none"}}
             />
+            {/* prawa strona */}
+            <div style={{flex:1}}/>
+            <button onClick={closeForm}
+              style={{padding:"7px 14px",fontSize:12,fontWeight:600,background:C.white,color:C.greyDk,border:`1px solid ${C.grey}`,borderRadius:6,cursor:"pointer",whiteSpace:"nowrap"}}>
+              Anuluj
+            </button>
+            {formMode === "new" ? (
+              <button onClick={addEntry} disabled={saving}
+                style={{padding:"7px 16px",fontSize:12,fontWeight:700,background:saving?C.greyDk:C.black,color:C.white,border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+                {saving ? "…" : "✓ Dodaj"}
+              </button>
+            ) : (
+              <button onClick={updateEntry} disabled={saving}
+                style={{padding:"7px 16px",fontSize:12,fontWeight:700,background:saving?C.greyDk:C.greenDk,color:C.white,border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+                {saving ? "…" : "✓ Zapisz"}
+              </button>
+            )}
           </div>
 
-          {/* PRZYCISKI AKCJI */}
-          {formMode === "new" ? (
-            <button onClick={addEntry} disabled={saving}
-              style={{width:"100%",background:saving?C.greyDk:C.black,color:C.white,border:"none",padding:14,fontSize:13,fontWeight:700,borderRadius:6,cursor:saving?"not-allowed":"pointer"}}>
-              {saving ? "Zapisywanie…" : "✓ Dodaj do planu"}
-            </button>
-          ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <button onClick={updateEntry} disabled={saving}
-                style={{width:"100%",background:saving?C.greyDk:C.greenDk,color:C.white,border:"none",padding:14,fontSize:13,fontWeight:700,borderRadius:6,cursor:saving?"not-allowed":"pointer"}}>
-                {saving ? "Zapisywanie…" : "✓ Zapisz zmiany"}
+          {/* WIERSZ 2: Usuń — tylko w trybie edycji, wyrównany do prawej */}
+          {formMode === "edit" && (
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button
+                onClick={()=>{ if(window.confirm("Usunąć to szkolenie z terminarza?")) { deleteEntry(editingId); closeForm(); } }}
+                style={{padding:"5px 12px",fontSize:11,fontWeight:600,background:"none",color:C.red,border:`1px solid ${C.red}`,borderRadius:5,cursor:"pointer"}}>
+                🗑 Usuń szkolenie
               </button>
-              <div style={{display:"flex",gap:8}}>
-                <button
-                  onClick={()=>{ if(window.confirm("Usunąć to szkolenie z terminarza?")) { deleteEntry(editingId); closeForm(); } }}
-                  style={{flex:1,background:"none",color:C.red,border:`1.5px solid ${C.red}`,padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
-                  🗑 Usuń
-                </button>
-                <button onClick={closeForm}
-                  style={{flex:1,background:C.greyDk,color:C.white,border:"none",padding:12,fontSize:13,fontWeight:600,borderRadius:6,cursor:"pointer"}}>
-                  ✕ Anuluj
-                </button>
-              </div>
             </div>
           )}
         </div>

@@ -38,7 +38,7 @@ function downloadICS(s, t) {
   URL.revokeObjectURL(url);
 }
 
-export function ScheduleTab({ activeGroups }) {
+export function ScheduleTab({ activeGroups, refreshKey }) {
   const { token, user } = useUser();
   const T = useT();
   const { addToast } = useToast();
@@ -52,7 +52,9 @@ export function ScheduleTab({ activeGroups }) {
   const [myInterests,     setMyInterests]     = useState(new Set());
   const [myContacted,     setMyContacted]     = useState(new Set()); // sid gdzie admin oznaczył contacted=true
   const [interestLoading, setInterestLoading] = useState(new Set());
-  const prevContactedRef = useRef(new Set()); // do wykrywania nowych contacted
+  // prevContactedRef — persystowany w sessionStorage żeby przeżył restart kontekstu na mobile (iOS/Android)
+  // iOS PWA agresywnie zabija procesy w tle, przez co useRef wraca do Set() przy każdym przebudzeniu
+  const prevContactedRef = useRef(new Set());
 
   useEffect(() => {
     async function load() {
@@ -80,20 +82,39 @@ export function ScheduleTab({ activeGroups }) {
             `select=scheduled_training_id,is_withdrawn,contacted&user_id=eq.${user.id}`
           );
           if (Array.isArray(interestData)) {
+            // is_withdrawn dotyczy tylko checkboxa zainteresowania —
+            // contacted sprawdzamy niezależnie (admin mógł skontaktować po wycofaniu)
+            const contactedSet = new Set(interestData.filter(r => r.contacted).map(r => r.scheduled_training_id));
             setMyInterests(new Set(interestData.filter(r => !r.is_withdrawn).map(r => r.scheduled_training_id)));
-            setMyContacted(new Set(interestData.filter(r => r.contacted).map(r => r.scheduled_training_id)));
+            setMyContacted(contactedSet);
+            prevContactedRef.current = contactedSet;
+            try {
+              sessionStorage.setItem("eea_contacted_" + user.id, JSON.stringify([...contactedSet]));
+            } catch {}
           }
         } catch (err) {
           console.warn("[ScheduleTab] nie można załadować zainteresowań (tabela może nie istnieć):", err);
         }
       }
     }
+    // Wczytaj poprzedni stan contacted z sessionStorage — ważne na mobile (iOS/Android)
+    // gdzie PWA może restartować kontekst JS w tle, kasując useRef do pustego Set()
+    if (user?.id) {
+      try {
+        const stored = sessionStorage.getItem("eea_contacted_" + user.id);
+        if (stored) prevContactedRef.current = new Set(JSON.parse(stored));
+      } catch {}
+    }
+
     load();
 
     // Realtime — nasłuchuj na UPDATE w training_interests tego użytkownika.
     // Gdy admin oznaczy contacted=true, klient dostaje powiadomienie Windows.
     if (!user?.id) return;
+    let processingInterest = false; // lock przeciw race condition gdy eventy przychodzą szybciej niż await
     const unsub = realtime.onNewInterest(token, async () => {
+      if (processingInterest) return; // drugi event przyszedł zanim pierwszy skończył — ignoruj
+      processingInterest = true;
       try {
         const interestData = await db.get(
           token,
@@ -102,10 +123,11 @@ export function ScheduleTab({ activeGroups }) {
         );
         if (!Array.isArray(interestData)) return;
         const active = interestData.filter(r => !r.is_withdrawn);
-        const newContactedSet = new Set(active.filter(r => r.contacted).map(r => r.scheduled_training_id));
+        // contacted sprawdzamy na wszystkich rekordach, niezależnie od is_withdrawn
+        const newContactedSet = new Set(interestData.filter(r => r.contacted).map(r => r.scheduled_training_id));
 
-        // Wykryj nowo dodane contacted (były false, teraz true)
-        const newlyContacted = active.filter(r =>
+        // Wykryj nowo dodane contacted (były false, teraz true) — na wszystkich rekordach
+        const newlyContacted = interestData.filter(r =>
           r.contacted && !prevContactedRef.current.has(r.scheduled_training_id)
         );
         if (newlyContacted.length > 0 && "Notification" in window && Notification.permission === "granted") {
@@ -121,12 +143,16 @@ export function ScheduleTab({ activeGroups }) {
         }
 
         prevContactedRef.current = newContactedSet;
+        try {
+          sessionStorage.setItem("eea_contacted_" + user.id, JSON.stringify([...newContactedSet]));
+        } catch {}
         setMyInterests(new Set(active.map(r => r.scheduled_training_id)));
         setMyContacted(newContactedSet);
       } catch {}
+      finally { processingInterest = false; }
     });
     return () => unsub();
-  }, [token, user?.id]);
+  }, [token, user?.id, refreshKey]);
 
   async function toggleInterest(s, e) {
     e.stopPropagation();
@@ -147,22 +173,26 @@ export function ScheduleTab({ activeGroups }) {
         is_withdrawn:          withdrawing,
       };
 
-      // Próba INSERT — jesli rekord juz istnieje (23505), to tylko UPDATE is_withdrawn
-      try {
-        await db.insert(token, "training_interests", payload);
-      } catch(insertErr) {
-        const msg = insertErr?.message || "";
-        // duplicate key / unique violation — rekord juz istnieje, robimy UPDATE
-        if (msg.includes("23505") || msg.includes("duplicate") || msg.includes("unique")) {
+      if (withdrawing) {
+        // Wycofanie — zawsze UPDATE (rekord na pewno istnieje, bo user był zainteresowany)
+        await db.update(
+          token,
+          "training_interests",
+          `user_id=eq.${user.id}&scheduled_training_id=eq.${sid}`,
+          { is_withdrawn: true }
+        );
+      } else {
+        // Zgłoszenie zainteresowania — INSERT, a jeśli rekord już istnieje (wcześniej wycofany) to UPDATE
+        try {
+          await db.insert(token, "training_interests", payload);
+        } catch(insertErr) {
           await db.update(
             token,
             "training_interests",
             `user_id=eq.${user.id}&scheduled_training_id=eq.${sid}`,
-            { is_withdrawn: withdrawing, name: payload.name, email: payload.email,
+            { is_withdrawn: false, name: payload.name, email: payload.email,
               firma: payload.firma, stanowisko: payload.stanowisko, phone: payload.phone }
           );
-        } else {
-          throw insertErr; // inny błąd — propaguj do zewnętrznego catch
         }
       }
 
@@ -387,6 +417,7 @@ export function ScheduleTab({ activeGroups }) {
           const date = new Date(s.date + "T00:00:00");
           const isOpen       = expandedCard === s.id;
           const isContacted  = myContacted.has(s.id);  // admin już skontaktował
+          const isWithdrawnLocally = !myInterests.has(s.id) && !isContacted; // wycofany i nie skontaktowany
           const isInterested = myInterests.has(s.id) && !isContacted; // zainteresowany ale jeszcze nie skontaktowany
           const isToggling   = interestLoading.has(s.id);
 
@@ -483,7 +514,7 @@ export function ScheduleTab({ activeGroups }) {
                       </div>
                       <div style={{textAlign:"left"}}>
                         <div style={{fontSize:13,fontWeight:700,color:"#1a7a3f"}}>Zapisany/a na szkolenie</div>
-                        <div style={{fontSize:11,color:"#2d9e5f",marginTop:1}}>Trener potwierdził Twoje zgłoszenie</div>
+                        <div style={{fontSize:11,color:"#2d9e5f",marginTop:1}}>Skontaktujemy się z Tobą w sprawie szczegółów</div>
                       </div>
                     </div>
                   ) : (

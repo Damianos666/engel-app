@@ -10,14 +10,28 @@ import { ScheduleTab } from "../ScheduleTab";
 
 const LOGO_URL = "/logo.png";
 const ALL_GROUPS = GROUPS.map(g => g.id);
+
+// Desktop: wszystkie zakładki w sidebarze
 const ADMIN_TABS = [
   ["Terminarz",      "📅"],
-  ["Terminarz w.k.", "👁"],
+  ["Widok klienta", "👁"],
   ["Wiadomości",     "✉"],
   ["Edytor szkoleń", "📋"],
   ["Zaliczenia",     "🎓"],
   ["Zgłoszenia",     "🙋"],
 ];
+
+// Mobile: bez "Terminarz w.k." — zastąpiona długim przytrzymaniem
+const MOBILE_TABS = [
+  ["Terminarz",  "📅", 0],  // [label, icon, desktopIndex]
+  ["Wiadomości", "✉",  2],  // długie przytrzymanie → Edytor szkoleń
+  ["Zaliczenia", "🎓", 4],
+  ["Zgłoszenia", "🙋", 5],
+];
+
+const STORAGE_KEY_SCHEDULE_VIEW = "eea_admin_schedule_view"; // "admin" | "client"
+const STORAGE_KEY_MSG_VIEW      = "eea_admin_msg_view";      // "messages" | "editor"
+
 
 const tabVisible = { display:"flex", flexDirection:"column", height:"100%", overflowY:"auto", WebkitOverflowScrolling:"touch" };
 const tabHidden  = { display:"none" };
@@ -35,15 +49,76 @@ function useIsDesktop() {
 }
 
 export function AdminPanel({ user, onLogout }) {
-  const [tab,             setTab]             = useState(0);
-  const [interestedCount, setInterestedCount] = useState(0);
+  const [tab,                setTabRaw]            = useState(0);
+  const [interestedCount,    setInterestedCount]   = useState(0);
+  const [scheduleRefreshKey,   setScheduleRefreshKey]   = useState(0);
+  const [interestedRefreshKey, setInterestedRefreshKey] = useState(0);
+  const prevTabRef = useRef(null);
+
+  function setTab(newTab) {
+    const prev = prevTabRef.current;
+    if (newTab === 0 && prev !== 0) setScheduleRefreshKey(k => k + 1);
+    if (newTab === 5 && prev !== 5) setInterestedRefreshKey(k => k + 1);
+    prevTabRef.current = newTab;
+    setTabRaw(newTab);
+  }
+  // scheduleView: "admin" | "client" — persystowane w localStorage
+  const [scheduleView, setScheduleView] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY_SCHEDULE_VIEW) || "admin"; }
+    catch { return "admin"; }
+  });
+  // msgView: "messages" | "editor" — persystowane w localStorage
+  const [msgView, setMsgView] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY_MSG_VIEW) || "messages"; }
+    catch { return "messages"; }
+  });
   const isDesktop = useIsDesktop();
-  const realtimeUnsub  = useRef(null);
-  const lastInterestAt = useRef(null); // ref do wykrywania nowych, nie widzianych wczeIniej
+  const realtimeUnsub   = useRef(null);
+  const lastInterestAt  = useRef(null);
+  const longPressTimer  = useRef(null);
 
   if (!user) return null;
 
   const token = user.accessToken;
+
+  function toggleScheduleView() {
+    setScheduleView(prev => {
+      const next = prev === "admin" ? "client" : "admin";
+      try { localStorage.setItem(STORAGE_KEY_SCHEDULE_VIEW, next); } catch {}
+      return next;
+    });
+  }
+
+  function toggleMsgView() {
+    setMsgView(prev => {
+      const next = prev === "messages" ? "editor" : "messages";
+      try { localStorage.setItem(STORAGE_KEY_MSG_VIEW, next); } catch {}
+      return next;
+    });
+  }
+
+  function makeLongPressHandlers(onLongPress, condition = true) {
+    if (!condition) return {};
+    return {
+      onMouseDown:   () => { longPressTimer.current = setTimeout(() => { onLongPress(); if ("vibrate" in navigator) navigator.vibrate(40); }, 600); },
+      onMouseUp:     () => clearTimeout(longPressTimer.current),
+      onMouseLeave:  () => clearTimeout(longPressTimer.current),
+      onTouchStart:  () => { longPressTimer.current = setTimeout(() => { onLongPress(); if ("vibrate" in navigator) navigator.vibrate(40); }, 600); },
+      onTouchEnd:    () => clearTimeout(longPressTimer.current),
+      onTouchCancel: () => clearTimeout(longPressTimer.current),
+    };
+  }
+
+  function handleScheduleLongPressStart(e) {
+    longPressTimer.current = setTimeout(() => {
+      toggleScheduleView();
+      if ("vibrate" in navigator) navigator.vibrate(40);
+    }, 600);
+  }
+
+  function handleScheduleLongPressEnd() {
+    clearTimeout(longPressTimer.current);
+  }
 
   // Wzorzec identyczny jak checkMessages w App.jsx —
   // pobiera dane z bazy, porównuje timestampy, WTEDY odpala Notification.
@@ -52,10 +127,10 @@ export function AdminPanel({ user, onLogout }) {
   const checkInterests = useCallback(async (tok) => {
     try {
       const data = await db.get(tok, "training_interests",
-        "select=id,created_at,name,email,contacted&order=created_at.desc&limit=20"
+        "select=id,created_at,name,email,contacted,is_withdrawn&order=created_at.desc&limit=20"
       );
       if (!Array.isArray(data)) return;
-      const nonContacted = data.filter(i => !i.contacted);
+      const nonContacted = data.filter(i => !i.contacted && !i.is_withdrawn);
       setInterestedCount(nonContacted.length);
       if (!data.length) return;
       const newestAt = data[0].created_at;
@@ -120,6 +195,21 @@ export function AdminPanel({ user, onLogout }) {
               — Panel zarządzania
             </span>
           )}
+          {/* Mobile: info o aktywnym widoku alternatywnym */}
+          {!isDesktop && tab === 0 && scheduleView === "client" && (
+            <span {...makeLongPressHandlers(toggleScheduleView)}
+              style={{ color: "#E67E22", fontSize: 10, fontWeight: 700, marginLeft: 4,
+                       WebkitUserSelect:"none", userSelect:"none" }}>
+              👁 widok klienta
+            </span>
+          )}
+          {!isDesktop && tab === 2 && msgView === "editor" && (
+            <span {...makeLongPressHandlers(toggleMsgView)}
+              style={{ color: "#E67E22", fontSize: 10, fontWeight: 700, marginLeft: 4,
+                       WebkitUserSelect:"none", userSelect:"none" }}>
+              📋 edytor szkoleń
+            </span>
+          )}
         </div>
         <button
           onClick={onLogout}
@@ -140,46 +230,66 @@ export function AdminPanel({ user, onLogout }) {
       {/* ── Zielona kreska ────────────────────────────────────────────── */}
       <div style={{ height: 3, background: C.green, flexShrink: 0 }}/>
 
-      {/* ── Górne zakładki (tylko mobile, na desktopie ukryte przez CSS) ─ */}
+      {/* ── Górne zakładki MOBILE (ukryte na desktopie przez CSS) ─ */}
       <div className="admin-top-tabs" style={{
         display: "flex",
         background: C.white,
         borderBottom: `1px solid ${C.grey}`,
         flexShrink: 0,
       }}>
-        {ADMIN_TABS.map(([label, icon], i) => (
-          <button key={i} onClick={() => setTab(i)}
-            style={{
-              flex: 1,
-              background: "none",
-              border: "none",
-              borderBottom: `3px solid ${tab === i ? C.green : "transparent"}`,
-              padding: "10px 4px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 3,
-              cursor: "pointer",
-              position: "relative",
-            }}
-          >
-            {/* badge dla Zainteresowani (index 5) */}
-            {i === 5 && interestedCount > 0 && (
-              <div style={{
-                position: "absolute", top: 4, right: "calc(50% - 14px)",
-                background: C.red, color: C.white, borderRadius: "50%",
-                width: 15, height: 15, fontSize: 8, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {interestedCount}
-              </div>
-            )}
-            <span style={{ fontSize: 16, color: tab === i ? C.black : C.greyMid }}>{icon}</span>
-            <span style={{ fontSize: 9, fontWeight: 700, color: tab === i ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
-              {label}
-            </span>
-          </button>
-        ))}
+        {MOBILE_TABS.map(([label, icon, desktopIdx], mIdx) => {
+          const isActive    = tab === desktopIdx;
+          const isSchedule  = desktopIdx === 0;
+          const isMessages  = desktopIdx === 2;
+          const isClientView  = isSchedule && scheduleView === "client";
+          const isEditorView  = isMessages && msgView === "editor";
+          // długie przytrzymanie aktywne zawsze (nie tylko gdy aktywna zakładka)
+          const lpHandlers = isSchedule
+            ? makeLongPressHandlers(toggleScheduleView)
+            : isMessages
+              ? makeLongPressHandlers(toggleMsgView)
+              : {};
+          return (
+            <button
+              key={mIdx}
+              onClick={() => setTab(desktopIdx)}
+              {...lpHandlers}
+              style={{
+                flex: 1,
+                background: "none",
+                border: "none",
+                borderBottom: `3px solid ${isActive ? C.green : "transparent"}`,
+                padding: "10px 4px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+                cursor: "pointer",
+                position: "relative",
+                WebkitUserSelect: "none",
+                userSelect: "none",
+              }}
+            >
+              {/* badge Zgłoszenia */}
+              {desktopIdx === 5 && interestedCount > 0 && (
+                <div style={{
+                  position: "absolute", top: 4, right: "calc(50% - 14px)",
+                  background: C.red, color: C.white, borderRadius: "50%",
+                  width: 15, height: 15, fontSize: 8, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {interestedCount}
+                </div>
+              )}
+              <span style={{ fontSize: 16, color: isActive ? C.black : C.greyMid }}>
+                {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : icon}
+              </span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
+                {isSchedule && isClientView ? "Widok klienta" : isMessages && isEditorView ? "Edytor" : label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Główna zawartość ──────────────────────────────────────────── */}
@@ -212,23 +322,33 @@ export function AdminPanel({ user, onLogout }) {
             ))}
           </nav>
           <div className="admin-content-area">
-            <div style={tab === 0 ? tabVisible : tabHidden}><AdminSchedule token={token}/></div>
+            <div style={tab === 0 ? tabVisible : tabHidden}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></div>
             <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
             <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
             <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
             <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-            <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => fetchInterestedCount(token)}/></div>
+            <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
           </div>
         </div>
       ) : (
-        /* MOBILE: zakładki na górze, treść pod spodem */
+        /* MOBILE: 4 zakładki */
         <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
-          <div style={tab === 0 ? tabVisible : tabHidden}><AdminSchedule token={token}/></div>
-          <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
-          <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
-          <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
+          {/* Terminarz — długie przytrzymanie przełącza widok admin ↔ klient */}
+          <div style={tab === 0 ? tabVisible : tabHidden}>
+            {scheduleView === "client"
+              ? <ScheduleTab activeGroups={ALL_GROUPS}/>
+              : <AdminSchedule token={token} refreshKey={scheduleRefreshKey}/>
+            }
+          </div>
+          {/* Wiadomości — długie przytrzymanie przełącza na Edytor szkoleń */}
+          <div style={tab === 2 ? tabVisible : tabHidden}>
+            {msgView === "editor"
+              ? <AdminTrainings token={token}/>
+              : <AdminMessages token={token}/>
+            }
+          </div>
           <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-          <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => fetchInterestedCount(token)}/></div>
+          <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
         </div>
       )}
     </div>
