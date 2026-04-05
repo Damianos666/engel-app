@@ -9,31 +9,18 @@ import { ToastProvider, useToast } from "./lib/ToastContext";
 import { UserContext, useUser } from "./lib/UserContext";
 import { Header, Spinner } from "./components/SharedUI";
 import { LoginScreen, ResetPasswordForm, parseHashParams, clearHashFromUrl } from "./components/Login";
+import { TrainingTab } from "./components/TrainingTab";
+import { CatalogTab } from "./components/CatalogTab";
+import { ScheduleTab } from "./components/ScheduleTab";
+import { MessagesTab } from "./components/MessagesTab";
+import { ProfileTab } from "./components/ProfileTab";
+import { TrainerScheduleTab } from "./components/TrainerScheduleTab";
 import { TabBar } from "./components/TabBar";
 
-// ─── LAZY IMPORTS: wszystkie taby i panele ────────────────────────────────
-// Każda rola dostaje swój zestaw chunków — klient nie pobiera kodu admina
-// ani trenera, trener nie pobiera admina, admin nie pobiera widoku klienta.
-// Preload właściwych chunków startuje w main.jsx zanim React się zamontuje
-// (czyta eea_role z localStorage i wywołuje dynamic import równolegle
-// z session restore — chunki są gotowe zanim splash screen zniknie).
+// POPRAWKA: GramTab lazy — nie trafia do głównego bundla, ładuje się tylko gdy otwarty
+const GramTab    = lazy(() => import("./components/GramTab").then(m => ({ default: m.GramTab })));
 
-// Taby klienta — chunk "client-tabs"
-const TrainingTab  = lazy(() => import("./components/TrainingTab").then(m => ({ default: m.TrainingTab })));
-const CatalogTab   = lazy(() => import("./components/CatalogTab").then(m => ({ default: m.CatalogTab })));
-const ScheduleTab  = lazy(() => import("./components/ScheduleTab").then(m => ({ default: m.ScheduleTab })));
-
-// Taby współdzielone klient+trener — chunk "shared-tabs"
-const MessagesTab  = lazy(() => import("./components/MessagesTab").then(m => ({ default: m.MessagesTab })));
-const ProfileTab   = lazy(() => import("./components/ProfileTab").then(m => ({ default: m.ProfileTab })));
-
-// Tab trenera — chunk "trainer"
-const TrainerScheduleTab = lazy(() => import("./components/TrainerScheduleTab").then(m => ({ default: m.TrainerScheduleTab })));
-
-// GramTab — lazy overlay, ładuje się tylko gdy użytkownik klika ikonę
-const GramTab      = lazy(() => import("./components/GramTab").then(m => ({ default: m.GramTab })));
-
-// Panel admina — chunk "admin", ładuje się tylko dla roli admin
+// Lazy imports — AdminPanel (~400KB) i komponenty trenera ładują się tylko gdy potrzebne
 const AdminPanel   = lazy(() => import("./components/admin/AdminPanel").then(m => ({ default: m.AdminPanel })));
 const AdminCodeGen = lazy(() => import("./components/admin/AdminCodeGen").then(m => ({ default: m.AdminCodeGen })));
 const AdminQuiz    = lazy(() => import("./components/admin/AdminQuiz").then(m => ({ default: m.AdminQuiz })));
@@ -378,10 +365,6 @@ function AppRoot({ onMounted }) {
       u.displayRole = u.stanowisko || "";
 
       setUserRaw(u);
-      // OPTYMALIZACJA: zapisz rolę do localStorage → przy kolejnym uruchomieniu
-      // main.jsx odczyta ją przed zamontowaniem React i wykona preload chunków
-      // równolegle z session restore (Supabase refreshToken call).
-      session.saveRole(u.role, u.trainer_id);
       if (Array.isArray(u.active_groups) && u.active_groups.length)
         setActiveGroups(u.active_groups);
       setNotifReminder(u.notif_reminder);
@@ -558,12 +541,6 @@ function AppRoot({ onMounted }) {
 function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, bannerSub, readIds, onMarkRead, msgRefreshKey }) {
   const { user } = useUser();
 
-  // mount-on-first-visit — taby trenera ładują chunki tylko przy pierwszym kliknięciu
-  const [visited, setVisited] = useState({ 0: true });
-  useEffect(() => {
-    if (!visited[tab]) setVisited(p => ({ ...p, [tab]: true }));
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     const handler = () => setTab(2);
     window.addEventListener("gram:goToMessages", handler);
@@ -580,48 +557,32 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
         <span style={styles.trainerBadge}>TRENER</span>
       </div>
       <div style={styles.trainerContent}>
-        {visited[0] && (
-          <div style={tab === 0 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
-            <Suspense fallback={<Spinner/>}>
-              <TrainerScheduleTab trainerNum={user.trainer_id}/>
-            </Suspense>
-          </div>
-        )}
-        {visited[1] && (
-          <div style={tab === 1 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
-            <Suspense fallback={<Spinner/>}>
-              <AdminCodeGen defaultTrainer={user.trainer_id}/>
-            </Suspense>
-          </div>
-        )}
-        {visited[2] && (
-          <div style={tab === 2 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
-            <Suspense fallback={<Spinner/>}>
-              <MessagesTab readIds={readIds} onMarkRead={onMarkRead} msgRefreshKey={msgRefreshKey}/>
-            </Suspense>
-          </div>
-        )}
-        {visited[3] && (
-          <div style={tab === 3 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
-            <Suspense fallback={<Spinner/>}>
-              <AdminQuiz/>
-            </Suspense>
-          </div>
-        )}
-        {visited[4] && (
-          <div style={tab === 4 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
-            <Suspense fallback={<Spinner/>}>
-              <ProfileTab
-                completed={completed}
-                activeGroups={activeGroups}
-                setActiveGroups={setActiveGroups}
-                onLogout={onLogout}
-                trainerView={trainerView}
-                setTrainerView={setTrainerView}
-              />
-            </Suspense>
-          </div>
-        )}
+        <div style={tab === 0 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
+          <TrainerScheduleTab trainerNum={user.trainer_id}/>
+        </div>
+        <div style={tab === 1 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
+          <Suspense fallback={<Spinner/>}>
+            <AdminCodeGen defaultTrainer={user.trainer_id}/>
+          </Suspense>
+        </div>
+        <div style={tab === 2 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
+          <MessagesTab readIds={readIds} onMarkRead={onMarkRead} msgRefreshKey={msgRefreshKey}/>
+        </div>
+        <div style={tab === 3 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
+          <Suspense fallback={<Spinner/>}>
+            <AdminQuiz/>
+          </Suspense>
+        </div>
+        <div style={tab === 4 ? {display:"flex",flexDirection:"column"} : {display:"none"}}>
+          <ProfileTab
+            completed={completed}
+            activeGroups={activeGroups}
+            setActiveGroups={setActiveGroups}
+            onLogout={onLogout}
+            trainerView={trainerView}
+            setTrainerView={setTrainerView}
+          />
+        </div>
       </div>
       <TrainerTabBar tab={tab} setTab={setTab} msgCount={msgCount}/>
     </div>
@@ -632,17 +593,6 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
 function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView, dataLoading, msgCount, progress, bannerSub, trainingOverrides, onComplete, gameData, onTipConfirmed, gramRefreshKey, scheduleRefreshKey, readIds, onMarkRead, msgRefreshKey }) {
   const { user } = useUser();
   const [showGram, setShowGram] = useState(false);
-
-  // OPTYMALIZACJA: mount-on-first-visit — każdy tab montuje się tylko raz
-  // (przy pierwszym kliknięciu), potem jest ukrywany przez display:none.
-  // Dzięki temu:
-  //  1. Stan taba (scroll, dane) przeżywa przełączenia.
-  //  2. Chunk danego taba pobierany jest dopiero gdy użytkownik go otworzy.
-  //  3. Tab 0 jest domyślnie zamontowany — reszta na żądanie.
-  const [visited, setVisited] = useState({ 0: true });
-  useEffect(() => {
-    if (!visited[tab]) setVisited(p => ({ ...p, [tab]: true }));
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = () => { setShowGram(false); setTab(3); };
@@ -668,56 +618,31 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
         </div>
       </div>
       <div style={styles.appContent}>
-        {/* Tab 0 — TrainingTab: montowany od razu (visited[0]=true z useState) */}
-        {visited[0] && (
-          <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
-            <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
-              <TrainingTab completed={completed} onComplete={onComplete} activeGroups={activeGroups} loading={dataLoading} trainingOverrides={trainingOverrides}/>
-            </Suspense>
-          </div>
-        )}
-        {/* Tab 1 — CatalogTab: chunk pobierany przy pierwszym kliknięciu */}
-        {visited[1] && (
-          <div style={tab === 1 ? styles.tabVisible : styles.tabHidden}>
-            <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
-              <CatalogTab completed={completed} activeGroups={activeGroups}/>
-            </Suspense>
-          </div>
-        )}
-        {/* Tab 2 — ScheduleTab */}
-        {visited[2] && (
-          <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
-            <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
-              <ScheduleTab refreshKey={scheduleRefreshKey} activeGroups={activeGroups} trainerNum={user.trainer_id}/>
-            </Suspense>
-          </div>
-        )}
-        {/* Tab 3 — MessagesTab: chunk "shared-tabs", współdzielony z trenerem */}
-        {visited[3] && (
-          <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
-            <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
-              <MessagesTab onTipConfirmed={onTipConfirmed} readIds={readIds} onMarkRead={onMarkRead} msgRefreshKey={msgRefreshKey}/>
-            </Suspense>
-          </div>
-        )}
-        {/* Tab 4 — ProfileTab: chunk "shared-tabs", współdzielony z trenerem */}
-        {visited[4] && (
-          <div style={tab === 4 ? styles.tabVisible : styles.tabHidden}>
-            <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
-              <ProfileTab
-                completed={completed}
-                activeGroups={activeGroups}
-                setActiveGroups={setActiveGroups}
-                onLogout={onLogout}
-                trainerView={trainerView}
-                setTrainerView={setTrainerView}
-              />
-            </Suspense>
-          </div>
-        )}
+        <div style={tab === 0 ? styles.tabVisible : styles.tabHidden}>
+          <TrainingTab completed={completed} onComplete={onComplete} activeGroups={activeGroups} loading={dataLoading} trainingOverrides={trainingOverrides}/>
+        </div>
+        <div style={tab === 1 ? styles.tabVisible : styles.tabHidden}>
+          <CatalogTab completed={completed} activeGroups={activeGroups}/>
+        </div>
+        <div style={tab === 2 ? styles.tabVisible : styles.tabHidden}>
+          <ScheduleTab refreshKey={scheduleRefreshKey} activeGroups={activeGroups} trainerNum={user.trainer_id}/>
+        </div>
+        <div style={tab === 3 ? styles.tabVisible : styles.tabHidden}>
+          <MessagesTab onTipConfirmed={onTipConfirmed} readIds={readIds} onMarkRead={onMarkRead} msgRefreshKey={msgRefreshKey}/>
+        </div>
+        <div style={tab === 4 ? styles.tabVisible : styles.tabHidden}>
+          <ProfileTab
+            completed={completed}
+            activeGroups={activeGroups}
+            setActiveGroups={setActiveGroups}
+            onLogout={onLogout}
+            trainerView={trainerView}
+            setTrainerView={setTrainerView}
+          />
+        </div>
       </div>
       <TabBar tab={tab} setTab={setTab} completedCount={completed.length} msgCount={msgCount}/>
-      {/* GramTab w Suspense — lazy overlay, ładuje się tylko gdy użytkownik klika */}
+      {/* POPRAWKA: GramTab w Suspense — lazy import, spinner podczas ładowania */}
       {showGram && (
         <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
           <GramTab key={gramRefreshKey} onClose={() => setShowGram(false)} onGoToMessages={() => { setShowGram(false); setTab(3); }}/>

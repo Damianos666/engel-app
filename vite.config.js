@@ -61,52 +61,9 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          // ─── ROLE-BASED CODE SPLITTING ────────────────────────────────────
-          // Każda rola pobiera tylko swój zestaw chunków:
-          //
-          //  klient  → vendor + shared-ui + client-tabs + shared-tabs + lazy(gram,quiz,pdf,qr)
-          //  trener  → vendor + shared-ui + trainer     + shared-tabs + lazy(admin-codegen,admin-quiz)
-          //  admin   → vendor + shared-ui + admin
-          //
-          // Workbox cache'uje każdy chunk osobno (content hash w nazwie).
-          // Deploy który zmienia tylko TrainingTab → tylko client-tabs.HASH.js
-          // jest pobierany od nowa. Pozostałe chunki serwowane są z cache.
-          manualChunks(id) {
-            // Vendor — react + react-dom. Zmienia się przy major upgradach.
-            if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/'))
-              return 'vendor';
-
-            // PDF — @react-pdf/renderer (~3MB). Ładowany tylko przy pobieraniu cert.
-            if (id.includes('@react-pdf'))
-              return 'pdf';
-
-            // Admin — cały panel admina. Tylko rola "admin".
-            if (id.includes('/components/admin/'))
-              return 'admin';
-
-            // GramTab — lazy overlay gamifikacji. Ładowany na żądanie (przycisk 🔥).
-            if (id.includes('GramTab'))
-              return 'gram';
-
-            // Quiz + nagrody — ładowane gdy użytkownik zaczyna quiz/tip.
-            if (id.includes('QuizGame') || id.includes('QuizRewardModal') || id.includes('TipRewardModal'))
-              return 'quiz';
-
-            // QR Scanner — jsqr (~200KB). Ładowany tylko przy skanowaniu QR.
-            if (id.includes('QRScannerTab'))
-              return 'qr';
-
-            // Trener — terminarz trenera. Tylko rola "trainer".
-            if (id.includes('TrainerScheduleTab'))
-              return 'trainer';
-
-            // Taby klienta — Training, Catalog, Schedule. Tylko rola "client".
-            if (id.includes('TrainingTab') || id.includes('CatalogTab') || id.includes('ScheduleTab'))
-              return 'client-tabs';
-
-            // Taby współdzielone klient+trener — Messages, Profile.
-            if (id.includes('MessagesTab') || id.includes('ProfileTab'))
-              return 'shared-tabs';
+          manualChunks: {
+            'react-vendor':   ['react', 'react-dom'],
+            'react-pdf':      ['@react-pdf/renderer'],
           },
         },
       },

@@ -7,7 +7,7 @@ import { Spinner, SecTitle, ClipboardSvg } from "./SharedUI";
 import { CelebModal, CertModal } from "./Modals";
 import { useT } from "../lib/LangContext";
 import { QuizGame, QuizResultModal } from "./QuizGame";
-import { GramTab } from "./GramTab"; // eslint-disable-line -- GramTab chunk jest współdzielony, import nie duplikuje kodu
+import { GramTab } from "./GramTab";
 import { useUser } from "../lib/UserContext";
 import { QRScannerTab } from "./QRScannerTab";
 
