@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState } from "react";
 import { C, GROUPS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";

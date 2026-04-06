@@ -1,12 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { C, GROUPS } from "../../lib/constants";
 import { db, realtime } from "../../lib/supabase";
-import { AdminMessages } from "./AdminMessages";
-import { AdminTrainings } from "./AdminTrainings";
-import { AdminSchedule } from "./AdminSchedule";
-import { AdminBatchComplete } from "./AdminBatchComplete";
-import { AdminInterested } from "./AdminInterested";
+import { Spinner } from "../SharedUI";
 import { ScheduleTab } from "../ScheduleTab";
+
+// ─── LAZY ADMIN SUB-PANELE ────────────────────────────────────────────────
+// Admin zawsze ląduje w zakładce 0 (Terminarz). Pozostałe 5 paneli ładuje
+// się dopiero przy pierwszym kliknięciu zakładki — nie przy logowaniu.
+// Łączny rozmiar paneli admina to ~800KB — lazy loading skraca czas do
+// interakcji przy pierwszym otwarciu panelu nawet o kilka sekund.
+const AdminMessages      = lazy(() => import("./AdminMessages").then(m => ({ default: m.AdminMessages })));
+const AdminTrainings     = lazy(() => import("./AdminTrainings").then(m => ({ default: m.AdminTrainings })));
+const AdminSchedule      = lazy(() => import("./AdminSchedule").then(m => ({ default: m.AdminSchedule })));
+const AdminBatchComplete = lazy(() => import("./AdminBatchComplete").then(m => ({ default: m.AdminBatchComplete })));
+const AdminInterested    = lazy(() => import("./AdminInterested").then(m => ({ default: m.AdminInterested })));
 
 const LOGO_URL = "/logo.png";
 const ALL_GROUPS = GROUPS.map(g => g.id);
@@ -55,12 +62,16 @@ export function AdminPanel({ user, onLogout }) {
   const [interestedRefreshKey, setInterestedRefreshKey] = useState(0);
   const prevTabRef = useRef(null);
 
+  // mount-on-first-visit — każdy panel admina ładuje chunk przy pierwszym kliknięciu
+  const [visited, setVisited] = useState({ 0: true });
+
   function setTab(newTab) {
     const prev = prevTabRef.current;
     if (newTab === 0 && prev !== 0) setScheduleRefreshKey(k => k + 1);
     if (newTab === 5 && prev !== 5) setInterestedRefreshKey(k => k + 1);
     prevTabRef.current = newTab;
     setTabRaw(newTab);
+    if (!visited[newTab]) setVisited(p => ({ ...p, [newTab]: true }));
   }
   // scheduleView: "admin" | "client" — persystowane w localStorage
   const [scheduleView, setScheduleView] = useState(() => {
@@ -322,33 +333,47 @@ export function AdminPanel({ user, onLogout }) {
             ))}
           </nav>
           <div className="admin-content-area">
-            <div style={tab === 0 ? tabVisible : tabHidden}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></div>
-            <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
-            <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
-            <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
-            <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-            <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
+            <div style={tab === 0 ? tabVisible : tabHidden}>
+              {visited[0] && <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>}
+            </div>
+            <div style={tab === 1 ? tabVisible : tabHidden}>
+              {visited[1] && <ScheduleTab activeGroups={ALL_GROUPS}/>}
+            </div>
+            <div style={tab === 2 ? tabVisible : tabHidden}>
+              {visited[2] && <Suspense fallback={<Spinner/>}><AdminMessages token={token}/></Suspense>}
+            </div>
+            <div style={tab === 3 ? tabVisible : tabHidden}>
+              {visited[3] && <Suspense fallback={<Spinner/>}><AdminTrainings token={token}/></Suspense>}
+            </div>
+            <div style={tab === 4 ? tabVisible : tabHidden}>
+              {visited[4] && <Suspense fallback={<Spinner/>}><AdminBatchComplete token={token}/></Suspense>}
+            </div>
+            <div style={tab === 5 ? tabVisible : tabHidden}>
+              {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+            </div>
           </div>
         </div>
       ) : (
         /* MOBILE: 4 zakładki */
         <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
-          {/* Terminarz — długie przytrzymanie przełącza widok admin ↔ klient */}
           <div style={tab === 0 ? tabVisible : tabHidden}>
-            {scheduleView === "client"
+            {visited[0] && (scheduleView === "client"
               ? <ScheduleTab activeGroups={ALL_GROUPS}/>
-              : <AdminSchedule token={token} refreshKey={scheduleRefreshKey}/>
-            }
+              : <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>
+            )}
           </div>
-          {/* Wiadomości — długie przytrzymanie przełącza na Edytor szkoleń */}
           <div style={tab === 2 ? tabVisible : tabHidden}>
-            {msgView === "editor"
-              ? <AdminTrainings token={token}/>
-              : <AdminMessages token={token}/>
-            }
+            {visited[2] && (msgView === "editor"
+              ? <Suspense fallback={<Spinner/>}><AdminTrainings token={token}/></Suspense>
+              : <Suspense fallback={<Spinner/>}><AdminMessages token={token}/></Suspense>
+            )}
           </div>
-          <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-          <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
+          <div style={tab === 4 ? tabVisible : tabHidden}>
+            {visited[4] && <Suspense fallback={<Spinner/>}><AdminBatchComplete token={token}/></Suspense>}
+          </div>
+          <div style={tab === 5 ? tabVisible : tabHidden}>
+            {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+          </div>
         </div>
       )}
     </div>
