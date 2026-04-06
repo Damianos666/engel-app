@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['logo.png', 'pwa-192.png', 'pwa-512.png'],
+        includeAssets: ['logo.png', 'pwa-192.png'],
         manifest: {
           name: 'ENGEL Expert Academy',
           short_name: 'Expert Academy',
@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           skipWaiting: true,
           clientsClaim: true,
-          globPatterns: ['**/*.{js,css,html,png,svg,ico,ttf,woff2}'],
+          globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
           globIgnores: ['version.json'],
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
           runtimeCaching: supabaseHost ? [
