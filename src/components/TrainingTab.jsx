@@ -1,15 +1,20 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { C, LVL_COLOR, GROUPS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { calcProgress } from "../lib/helpers";
 import { edge } from "../lib/supabase";
 import { Spinner, SecTitle, ClipboardSvg } from "./SharedUI";
-import { CelebModal, CertModal } from "./Modals";
 import { useT } from "../lib/LangContext";
-import { QuizGame, QuizResultModal } from "./QuizGame";
-import { GramTab } from "./GramTab"; // eslint-disable-line -- GramTab chunk jest współdzielony, import nie duplikuje kodu
 import { useUser } from "../lib/UserContext";
-import { QRScannerTab } from "./QRScannerTab";
+
+// ─── LAZY — każdy z poniższych to osobny chunk. Ładuje się tylko gdy
+// użytkownik wykona akcję (skan QR, kliknięcie certyfikatu, quiz, itp.)
+const CelebModal      = lazy(() => import("./Modals").then(m => ({ default: m.CelebModal })));
+const CertModal       = lazy(() => import("./Modals").then(m => ({ default: m.CertModal })));
+const QuizGame        = lazy(() => import("./QuizGame").then(m => ({ default: m.QuizGame })));
+const QuizResultModal = lazy(() => import("./QuizGame").then(m => ({ default: m.QuizResultModal })));
+const GramTab         = lazy(() => import("./GramTab").then(m => ({ default: m.GramTab })));
+const QRScannerTab    = lazy(() => import("./QRScannerTab").then(m => ({ default: m.QRScannerTab })));
 
 // Czy urządzenie obsługuje kamerę (pokaż przycisk skanera)
 const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -114,20 +119,22 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
   if (loading) return <div style={{background:C.greyBg,flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
 
   if (showScanner) return (
-    <QRScannerTab
-      token={user.accessToken}
-      onComplete={result => {
-        handleSuccess(result, result.key || "");
-      }}
-      onClose={() => setShowScanner(false)}
-    />
+    <Suspense fallback={<div style={{background:C.greyBg,flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>}>
+      <QRScannerTab
+        token={user.accessToken}
+        onComplete={result => {
+          handleSuccess(result, result.key || "");
+        }}
+        onClose={() => setShowScanner(false)}
+      />
+    </Suspense>
   );
 
   if (completed.length === 0) return (
     <div style={{background:C.greyBg,flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
-      {showQuiz && quizMode === "custom"  && <GramTab onClose={() => setShowQuiz(false)}/>}
-      {showQuiz && quizMode === "training" && <QuizGame token={user.accessToken} user={user} mode="training" onComplete={entry => { onComplete(entry); }} onClose={() => setShowQuiz(false)}/>}
-      {celebEntry && <CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/>}
+      {showQuiz && quizMode === "custom"   && <Suspense fallback={<Spinner/>}><GramTab onClose={() => setShowQuiz(false)}/></Suspense>}
+      {showQuiz && quizMode === "training" && <Suspense fallback={<Spinner/>}><QuizGame token={user.accessToken} user={user} mode="training" onComplete={entry => { onComplete(entry); }} onClose={() => setShowQuiz(false)}/></Suspense>}
+      {celebEntry && <Suspense fallback={null}><CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/></Suspense>}
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100%",padding:"32px 24px 48px",textAlign:"center"}}>
         <ClipboardSvg/>
         <div style={{fontSize:18,fontWeight:600,color:C.black,marginTop:20,marginBottom:24}}>{T.enter_code}</div>
@@ -142,11 +149,11 @@ export function TrainingTab({ completed, onComplete, activeGroups, loading }) {
 
   return (
     <div style={{background:C.greyBg,flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
-      {showQuiz && quizMode === "custom"  && <GramTab onClose={() => setShowQuiz(false)}/>}
-      {showQuiz && quizMode === "training" && <QuizGame token={user.accessToken} user={user} mode="training" onComplete={entry => { onComplete(entry); setShowQuiz(false); }} onClose={() => setShowQuiz(false)}/>}
-      {celebEntry && <CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/>}
-      {certEntry   && <CertModal       entry={certEntry}  user={user} onClose={() => setCertEntry(null)}/>}
-      {quizResult  && <QuizResultModal entry={quizResult} onClose={() => setQuizResult(null)}/>}
+      {showQuiz && quizMode === "custom"   && <Suspense fallback={<Spinner/>}><GramTab onClose={() => setShowQuiz(false)}/></Suspense>}
+      {showQuiz && quizMode === "training" && <Suspense fallback={<Spinner/>}><QuizGame token={user.accessToken} user={user} mode="training" onComplete={entry => { onComplete(entry); setShowQuiz(false); }} onClose={() => setShowQuiz(false)}/></Suspense>}
+      {celebEntry && <Suspense fallback={null}><CelebModal entry={celebEntry} onClose={() => setCelebEntry(null)}/></Suspense>}
+      {certEntry   && <Suspense fallback={null}><CertModal       entry={certEntry}  user={user} onClose={() => setCertEntry(null)}/></Suspense>}
+      {quizResult  && <Suspense fallback={null}><QuizResultModal entry={quizResult} onClose={() => setQuizResult(null)}/></Suspense>}
       <div style={{background:C.white,margin:12,padding:18,boxShadow:"0 1px 3px rgba(0,0,0,.07)"}}>
         <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:14,textTransform:"uppercase"}}>{T.enter_code}</div>
         {codeInput}
