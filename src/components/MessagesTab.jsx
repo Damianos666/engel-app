@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, memo, lazy, Suspense } from "react";
 import { C, MSG_TYPES, DEV_PANEL_ENABLED } from "../lib/constants";
 import { db, rpc } from "../lib/supabase";
 import { formatDate } from "../lib/helpers";
@@ -6,9 +6,12 @@ import { Spinner, Toggle } from "./SharedUI";
 import { useT } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
 import { getDailyTipFromCycle, TIP_POINTS, isQuizDay, getWeekKey, getWeekQuestions, getProgramInfo } from "../lib/gamification";
-import { WeeklyQuiz } from "./GramTab";
-import { QuizRewardModal } from "./QuizRewardModal";
-import { TipRewardModal } from "./TipRewardModal";
+
+// ─── LAZY IMPORTS — gram + quiz ładują się tylko gdy użytkownik naprawdę
+// zobaczy quiz/tip baner. Nie są wciągane do chunk shared-tabs przy starcie.
+const WeeklyQuiz      = lazy(() => import("./GramTab").then(m => ({ default: m.WeeklyQuiz })));
+const QuizRewardModal = lazy(() => import("./QuizRewardModal").then(m => ({ default: m.QuizRewardModal })));
+const TipRewardModal  = lazy(() => import("./TipRewardModal").then(m => ({ default: m.TipRewardModal })));
 
 const CONTACT_EMAIL = import.meta.env.VITE_CONTACT_EMAIL || "";
 const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "";
@@ -158,7 +161,7 @@ function TipBanner({ token, userId, onConfirmed, devDateStr = null, onDevSeen, c
   }
 
   if (loading || !tipQ) return null;
-  if (tipModal) return <TipRewardModal totalPoints={tipModal.totalPoints} streak={tipModal.streak} onClose={() => setTipModal(null)}/>;
+  if (tipModal) return <Suspense fallback={<Spinner/>}><TipRewardModal totalPoints={tipModal.totalPoints} streak={tipModal.streak} onClose={() => setTipModal(null)}/></Suspense>;
 
   if (confirmed) return (
     <div style={{ ...S.doneBadge, background: devDateStr ? "rgba(230,126,34,.1)" : C.greenBg, border: `1px solid ${devDateStr ? "#E67E22" : C.green}` }}>
@@ -240,7 +243,7 @@ function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDev
   }
 
   if (loading || !isQuizDay(programStart, devDateStr)) return null;
-  if (result) return <QuizRewardModal result={result} totalPoints={result.newPoints} onClose={() => setResult(null)}/>;
+  if (result) return <Suspense fallback={<Spinner/>}><QuizRewardModal result={result} totalPoints={result.newPoints} onClose={() => setResult(null)}/></Suspense>;
 
   if (quizDone) return (
     <div style={{ ...S.doneBadge, background: "#EAF3DE", border: "1px solid #8AB73E" }}>
@@ -284,7 +287,7 @@ function WeeklyQuizBanner({ token, userId, onConfirmed, devDateStr = null, onDev
               <button onClick={() => setShowQuiz(false)} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#ccc", fontSize: 16, cursor: "pointer", width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-              <WeeklyQuiz questions={questions} onResult={handleResult}/>
+              <Suspense fallback={<Spinner/>}><WeeklyQuiz questions={questions} onResult={handleResult}/></Suspense>
             </div>
           </div>
         </div>
