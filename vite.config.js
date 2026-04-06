@@ -42,44 +42,68 @@ export default defineConfig(({ mode }) => {
         workbox: {
           skipWaiting: true,
           clientsClaim: true,
-          globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-          globIgnores: ['version.json'],
-          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-          runtimeCaching: supabaseHost ? [
-            // ── REST API — NetworkFirst, 5 min cache ─────────────────────────
-            // Dane z bazy: wiadomości, szkolenia, terminarze.
-            // NetworkFirst = próbuje sieć, fallback na cache przy braku połączenia.
+          // JS/CSS/HTML + czcionki woff2 — małe pliki, szybki pre-cache.
+          // PNG i SVG celowo poza pre-cache: ikony PWA przeglądarka ma po install,
+          // logo cachujemy runtime przy pierwszym żądaniu (patrz niżej).
+          // Chunk pdf (~3MB) wykluczony — trafia do runtimeCaching poniżej.
+          globPatterns: ['**/*.{js,css,html,woff2}'],
+          globIgnores: [
+            'version.json',
+            '**/pdf.*.js',   // @react-pdf chunk — 3MB, lazy + runtime cache wystarczy
+            '**/pwa-*.png',  // ikony PWA — tylko dla install prompt
+          ],
+          maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+          runtimeCaching: [
+            // ── Statyczne assety — CacheFirst, długi TTL ─────────────────────
+            // logo.png i svg — nie zmieniają się między deployami (brak hash w nazwie).
+            // CacheFirst: przeglądarka serwuje z cache, odświeża w tle co 30 dni.
             {
-              urlPattern: new RegExp(`^https://${supabaseHost}/rest/v1/.*`, 'i'),
-              handler: 'NetworkFirst',
+              urlPattern: /\.(png|svg|ico)$/i,
+              handler: 'CacheFirst',
               options: {
-                cacheName: 'supabase-rest',
-                expiration: { maxEntries: 60, maxAgeSeconds: 5 * 60 },
-                networkTimeoutSeconds: 4,
+                cacheName: 'static-assets',
+                expiration: { maxEntries: 20, maxAgeSeconds: 30 * 24 * 60 * 60 },
               },
             },
-            // ── AUTH — NetworkOnly (nigdy nie cache'uj tokenów) ──────────────
-            // Tokeny sesji muszą zawsze iść przez sieć. Cache'owanie auth
-            // to podatność bezpieczeństwa — stary token z cache może być już
-            // unieważniony.
+            // ── PDF chunk — CacheFirst po pierwszym pobraniu ──────────────────
+            // @react-pdf/renderer (~3MB). Ładowany tylko gdy ktoś kliknie
+            // "Certyfikat". Po pierwszym pobraniu cachowany na 7 dni.
             {
-              urlPattern: new RegExp(`^https://${supabaseHost}/auth/v1/.*`, 'i'),
-              handler: 'NetworkOnly',
-            },
-            // ── EDGE FUNCTIONS — NetworkFirst, 30 s cache ────────────────────
-            // Edge functions (generowanie kodów, weryfikacja) mają cold start
-            // do 2s. NetworkFirst z krótkim cache pozwala na fallback gdy sieć
-            // jest niestabilna, ale nie cache'uje zbyt długo (kody są jednorazowe).
-            {
-              urlPattern: new RegExp(`^https://${supabaseHost}/functions/v1/.*`, 'i'),
-              handler: 'NetworkFirst',
+              urlPattern: /\/pdf\.[a-z0-9]+\.js$/i,
+              handler: 'CacheFirst',
               options: {
-                cacheName: 'supabase-edge',
-                expiration: { maxEntries: 10, maxAgeSeconds: 30 },
-                networkTimeoutSeconds: 8,
+                cacheName: 'pdf-chunk',
+                expiration: { maxEntries: 2, maxAgeSeconds: 7 * 24 * 60 * 60 },
               },
             },
-          ] : [],
+            ...(supabaseHost ? [
+              // ── REST API — NetworkFirst, 5 min cache ─────────────────────────
+              {
+                urlPattern: new RegExp(`^https://${supabaseHost}/rest/v1/.*`, 'i'),
+                handler: 'NetworkFirst',
+                options: {
+                  cacheName: 'supabase-rest',
+                  expiration: { maxEntries: 60, maxAgeSeconds: 5 * 60 },
+                  networkTimeoutSeconds: 4,
+                },
+              },
+              // ── AUTH — NetworkOnly (nigdy nie cache'uj tokenów) ──────────────
+              {
+                urlPattern: new RegExp(`^https://${supabaseHost}/auth/v1/.*`, 'i'),
+                handler: 'NetworkOnly',
+              },
+              // ── EDGE FUNCTIONS — NetworkFirst, 30 s cache ────────────────────
+              {
+                urlPattern: new RegExp(`^https://${supabaseHost}/functions/v1/.*`, 'i'),
+                handler: 'NetworkFirst',
+                options: {
+                  cacheName: 'supabase-edge',
+                  expiration: { maxEntries: 10, maxAgeSeconds: 30 },
+                  networkTimeoutSeconds: 8,
+                },
+              },
+            ] : []),
+          ],
         },
       }),
     ],
