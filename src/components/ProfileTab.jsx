@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { C, GROUPS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
 import { calcProgress } from "../lib/helpers";
-import { Toggle, SecTitle } from "./SharedUI";
+import { Toggle, SecTitle, Spinner } from "./SharedUI";
 import { log, warn, err as logErr } from "../lib/logger";
 import { useT, useLang } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
-import { GramTab } from "./GramTab";
+
+// ─── LAZY — GramTab (~gamifikacja) ładuje się tylko gdy użytkownik kliknie
+// przycisk 🔥. Nie wchodzi do chunk shared-tabs przy starcie.
+const GramTab = lazy(() => import("./GramTab").then(m => ({ default: m.GramTab })));
 
 export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView }) {
   const { user, setUser } = useUser();
@@ -184,7 +187,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
         <button style={{background:C.black,border:"none",color:C.white,padding:16,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:8}} onClick={onLogout}>{T.logout}</button>
       </div>
     </div>
-    {showGram && <GramTab onClose={() => setShowGram(false)}/>}
+    {showGram && <Suspense fallback={<Spinner/>}><GramTab onClose={() => setShowGram(false)}/></Suspense>}
     </>
   );
 }
