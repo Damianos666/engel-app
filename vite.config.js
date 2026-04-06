@@ -49,8 +49,11 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,woff2}'],
           globIgnores: [
             'version.json',
-            '**/pdf.*.js',   // @react-pdf chunk — 3MB, lazy + runtime cache wystarczy
-            '**/pwa-*.png',  // ikony PWA — tylko dla install prompt
+            '**/pdf-*.js',   // @react-pdf chunk — 3MB, lazy + runtime cache wystarczy
+            '**/pwa-*.png',     // ikony PWA — tylko dla install prompt
+            '**/certGenerator-*.js', // lazy — ładowany tylko przy pobraniu cert
+            '**/certId-*.js',        // lazy — ładowany tylko przy pobraniu cert
+            '**/browser-*.js',       // qrcode lib — lazy przez QRScanner
           ],
           maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
           runtimeCaching: [
@@ -69,7 +72,7 @@ export default defineConfig(({ mode }) => {
             // @react-pdf/renderer (~3MB). Ładowany tylko gdy ktoś kliknie
             // "Certyfikat". Po pierwszym pobraniu cachowany na 7 dni.
             {
-              urlPattern: /\/pdf\.[a-z0-9]+\.js$/i,
+              urlPattern: /\/pdf[-_.][a-z0-9]+\.js$/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'pdf-chunk',
