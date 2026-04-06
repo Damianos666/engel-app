@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react"
 import { C, GROUPS } from "../../lib/constants";
 import { db, realtime } from "../../lib/supabase";
 import { Spinner } from "../SharedUI";
-import { ScheduleTab } from "../ScheduleTab";
 
 // ─── LAZY ADMIN SUB-PANELE ────────────────────────────────────────────────
 // Admin zawsze ląduje w zakładce 0 (Terminarz). Pozostałe 5 paneli ładuje
@@ -14,7 +13,8 @@ const AdminTrainings     = lazy(() => import("./AdminTrainings").then(m => ({ de
 const AdminSchedule      = lazy(() => import("./AdminSchedule").then(m => ({ default: m.AdminSchedule })));
 const AdminBatchComplete = lazy(() => import("./AdminBatchComplete").then(m => ({ default: m.AdminBatchComplete })));
 const AdminInterested    = lazy(() => import("./AdminInterested").then(m => ({ default: m.AdminInterested })));
-
+// ScheduleTab (chunk client-tabs) — lazy żeby admin chunk nie wciągał kodu klienta
+const ScheduleTab        = lazy(() => import("../ScheduleTab").then(m => ({ default: m.ScheduleTab })));
 const LOGO_URL = "/logo.png";
 const ALL_GROUPS = GROUPS.map(g => g.id);
 
@@ -337,7 +337,7 @@ export function AdminPanel({ user, onLogout }) {
               {visited[0] && <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>}
             </div>
             <div style={tab === 1 ? tabVisible : tabHidden}>
-              {visited[1] && <ScheduleTab activeGroups={ALL_GROUPS}/>}
+              {visited[1] && <Suspense fallback={<Spinner/>}><ScheduleTab activeGroups={ALL_GROUPS}/></Suspense>}
             </div>
             <div style={tab === 2 ? tabVisible : tabHidden}>
               {visited[2] && <Suspense fallback={<Spinner/>}><AdminMessages token={token}/></Suspense>}
@@ -358,7 +358,7 @@ export function AdminPanel({ user, onLogout }) {
         <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
           <div style={tab === 0 ? tabVisible : tabHidden}>
             {visited[0] && (scheduleView === "client"
-              ? <ScheduleTab activeGroups={ALL_GROUPS}/>
+              ? <Suspense fallback={<Spinner/>}><ScheduleTab activeGroups={ALL_GROUPS}/></Suspense>
               : <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>
             )}
           </div>
