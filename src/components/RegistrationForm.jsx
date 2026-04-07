@@ -235,24 +235,21 @@ export function RegistrationForm() {
           {/* Nagłówek */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 16, padding: "16px 24px", borderBottom: `4px solid ${C.green}`,
-            background: C.white, flexWrap: "wrap",
+            gap: 16, padding: "20px 24px", borderBottom: `4px solid ${C.green}`,
+            background: "#2C2C2C", flexWrap: "wrap",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {/* pkt 3: logo-header.png na ciemnym tle */}
-              <div style={{ background: "#2C2C2C", borderRadius: 10, padding: "10px 16px", display: "flex", alignItems: "center" }}>
-                <img src="/logo-header.png" alt="ENGEL" style={{ height: 28, width: "auto", display: "block" }} />
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              <img src="/logo-header.png" alt="ENGEL" style={{ height: 28, width: "auto", display: "block" }} />
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: .3, textTransform: "uppercase", color: C.greyDk }}>
+                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: .3, textTransform: "uppercase", color: C.white }}>
                   Formularz zgłoszeniowy — szkolenie
                 </div>
-                <div style={{ fontSize: 12, color: C.greyMid, marginTop: 3 }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 3 }}>
                   Wypełnij dane firmy, osoby kontaktowej oraz dodaj uczestników.
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: 11, color: C.greyMid }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
               <span style={{ color: C.green, fontWeight: 900 }}>*</span> pola obowiązkowe
             </div>
           </div>
