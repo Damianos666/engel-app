@@ -481,6 +481,7 @@ function AppRoot({ onMounted }) {
 
   // ── Publiczna strona /rejestracja — bez logowania ─────────────────────
   if (window.location.pathname === "/rejestracja") {
+    document.body.classList.add("rejestracja-page");
     return <RegistrationForm />;
   }
 

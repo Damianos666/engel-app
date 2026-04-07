@@ -41,6 +41,7 @@ const MOBILE_TABS = [
 
 const STORAGE_KEY_SCHEDULE_VIEW = "eea_admin_schedule_view"; // "admin" | "client"
 const STORAGE_KEY_MSG_VIEW      = "eea_admin_msg_view";      // "messages" | "editor"
+const STORAGE_KEY_ZR_ORDER      = "eea_admin_zr_order";      // "zg_first" | "reg_first"
 
 
 const tabVisible = { display:"flex", flexDirection:"column", height:"100%", overflowY:"auto", WebkitOverflowScrolling:"touch" };
@@ -89,6 +90,19 @@ export function AdminPanel({ user, onLogout }) {
     try { return localStorage.getItem(STORAGE_KEY_MSG_VIEW) || "messages"; }
     catch { return "messages"; }
   });
+  // zrOrder: kolejność Zgłoszenia/Rejestracje — "zg_first" | "reg_first"
+  const [zrOrder, setZrOrder] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY_ZR_ORDER) || "zg_first"; }
+    catch { return "zg_first"; }
+  });
+
+  function toggleZrOrder() {
+    setZrOrder(prev => {
+      const next = prev === "zg_first" ? "reg_first" : "zg_first";
+      try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, next); } catch {}
+      return next;
+    });
+  }
   const isDesktop = useIsDesktop();
   const realtimeUnsub   = useRef(null);
   const lastInterestAt  = useRef(null);
@@ -153,6 +167,14 @@ export function AdminPanel({ user, onLogout }) {
       const newestAt = data[0].created_at;
       if (lastInterestAt.current && newestAt > lastInterestAt.current) {
         const newOnes = data.filter(i => i.created_at > lastInterestAt.current);
+        // Nowe zgłoszenie → przsuń Zgłoszenia na pierwsze miejsce
+        setZrOrder(prev => {
+          if (prev !== "zg_first") {
+            try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, "zg_first"); } catch {}
+            return "zg_first";
+          }
+          return prev;
+        });
         if ("Notification" in window && Notification.permission === "granted") {
           newOnes.forEach(item => {
             new Notification("🙋 ENGEL Expert Academy", {
@@ -195,6 +217,14 @@ export function AdminPanel({ user, onLogout }) {
       const newestAt = data[0].created_at;
       if (lastRegAt.current && newestAt > lastRegAt.current) {
         const newOnes = data.filter(r => r.created_at > lastRegAt.current);
+        // Nowa rejestracja → przesuń Rejestracje na pierwsze miejsce
+        setZrOrder(prev => {
+          if (prev !== "reg_first") {
+            try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, "reg_first"); } catch {}
+            return "reg_first";
+          }
+          return prev;
+        });
         if ("Notification" in window && Notification.permission === "granted") {
           newOnes.forEach(item => {
             new Notification("📩 ENGEL Expert Academy", {
@@ -296,24 +326,50 @@ export function AdminPanel({ user, onLogout }) {
           const isActive    = tab === desktopIdx;
           const isSchedule  = desktopIdx === 0;
           const isMessages  = desktopIdx === 2;
+          const isZg        = desktopIdx === 5;
+          const isReg       = desktopIdx === 6;
           const isClientView  = isSchedule && scheduleView === "client";
           const isEditorView  = isMessages && msgView === "editor";
-          // długie przytrzymanie aktywne zawsze (nie tylko gdy aktywna zakładka)
+
+          // Dla Zgłoszenia/Rejestracje — dynamiczna kolejność
+          // Wyświetlamy je w kolejności zależnej od zrOrder
+          // MOBILE_TABS ma je w pozycjach 3 i 4 (mIdx 3=Zgłoszenia, 4=Rejestracje)
+          // Zamieniamy tylko ikonę/label/desktopIdx w renderze
+          let renderDesktopIdx = desktopIdx;
+          let renderLabel = label;
+          let renderIcon = icon;
+          if (mIdx === 3) {
+            // slot 3: pierwszy z pary ZG/REG
+            renderDesktopIdx = zrOrder === "zg_first" ? 5 : 6;
+            renderLabel      = zrOrder === "zg_first" ? "Zgłoszenia" : "Rejestracje";
+            renderIcon       = zrOrder === "zg_first" ? "🙋" : "📩";
+          } else if (mIdx === 4) {
+            // slot 4: drugi z pary
+            renderDesktopIdx = zrOrder === "zg_first" ? 6 : 5;
+            renderLabel      = zrOrder === "zg_first" ? "Rejestracje" : "Zgłoszenia";
+            renderIcon       = zrOrder === "zg_first" ? "📩" : "🙋";
+          }
+          const isActiveRender  = tab === renderDesktopIdx;
+          const isZgReg = mIdx === 3 || mIdx === 4;
+
+          // długie przytrzymanie
           const lpHandlers = isSchedule
             ? makeLongPressHandlers(toggleScheduleView)
             : isMessages
               ? makeLongPressHandlers(toggleMsgView)
-              : {};
+              : isZgReg
+                ? makeLongPressHandlers(toggleZrOrder)
+                : {};
           return (
             <button
               key={mIdx}
-              onClick={() => setTab(desktopIdx)}
+              onClick={() => setTab(renderDesktopIdx)}
               {...lpHandlers}
               style={{
                 flex: 1,
                 background: "none",
                 border: "none",
-                borderBottom: `3px solid ${isActive ? C.green : "transparent"}`,
+                borderBottom: `3px solid ${isActiveRender ? C.green : "transparent"}`,
                 padding: "10px 4px",
                 display: "flex",
                 flexDirection: "column",
@@ -326,7 +382,7 @@ export function AdminPanel({ user, onLogout }) {
               }}
             >
               {/* badge Zgłoszenia */}
-              {desktopIdx === 5 && interestedCount > 0 && (
+              {renderDesktopIdx === 5 && interestedCount > 0 && (
                 <div style={{
                   position: "absolute", top: 4, right: "calc(50% - 14px)",
                   background: C.red, color: C.white, borderRadius: "50%",
@@ -337,7 +393,7 @@ export function AdminPanel({ user, onLogout }) {
                 </div>
               )}
               {/* badge Rejestracje */}
-              {desktopIdx === 6 && registrationsCount > 0 && (
+              {renderDesktopIdx === 6 && registrationsCount > 0 && (
                 <div style={{
                   position: "absolute", top: 4, right: "calc(50% - 14px)",
                   background: "#2980B9", color: C.white, borderRadius: "50%",
@@ -347,11 +403,11 @@ export function AdminPanel({ user, onLogout }) {
                   {registrationsCount}
                 </div>
               )}
-              <span style={{ fontSize: 16, color: isActive ? C.black : C.greyMid }}>
-                {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : icon}
+              <span style={{ fontSize: 16, color: isActiveRender ? C.black : C.greyMid }}>
+                {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : renderIcon}
               </span>
-              <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
-                {isSchedule && isClientView ? "Widok klienta" : isMessages && isEditorView ? "Edytor" : label}
+              <span style={{ fontSize: 9, fontWeight: 700, color: isActiveRender ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
+                {isSchedule && isClientView ? "Widok klienta" : isMessages && isEditorView ? "Edytor" : renderLabel}
               </span>
             </button>
           );

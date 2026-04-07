@@ -27,6 +27,18 @@
         overflow: hidden;
       }
 
+      /* Strona /rejestracja — pełne scrollowanie */
+      body.rejestracja-page {
+        overflow: auto !important;
+        overflow-x: hidden !important;
+        height: auto !important;
+      }
+      body.rejestracja-page #root {
+        overflow: auto !important;
+        height: auto !important;
+        min-height: 100vh !important;
+      }
+
       /* ── Splash screen ────────────────────────────────────────────────── */
       #splash {
         position: fixed;
@@ -86,6 +98,21 @@
           height: 90vh !important;
           max-height: 844px !important;
           box-shadow: 0 8px 40px rgba(0,0,0,0.25) !important;
+        }
+        /* Strona /rejestracja na desktopie — pełna szerokość, bez ograniczeń */
+        body.rejestracja-page {
+          background: #f0f0f0 !important;
+          overflow: auto !important;
+          height: auto !important;
+        }
+        body.rejestracja-page #root {
+          display: block !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: 100vh !important;
+          overflow: auto !important;
+          align-items: unset !important;
+          justify-content: unset !important;
         }
         .app-container.admin-desktop {
           width: min(96vw, 1200px) !important;
@@ -162,6 +189,20 @@
           max-height: none !important;
           box-shadow: none !important;
           overflow: hidden;
+        }
+        /* Wyjątek: strona /rejestracja musi się przewijać */
+        body.rejestracja-page,
+        body.rejestracja-page html {
+          width: 100% !important;
+          height: auto !important;
+          overflow: auto !important;
+          overflow-x: hidden !important;
+        }
+        body.rejestracja-page #root {
+          width: 100% !important;
+          height: auto !important;
+          min-height: 100vh !important;
+          overflow: auto !important;
         }
         .app-content { -webkit-overflow-scrolling: touch; }
 

@@ -187,6 +187,33 @@ function RegCard({ item, token, onUpdate, onDelete }) {
   const [saving,       setSaving]       = useState(false);
   const [toggling,     setToggling]     = useState(false);
   const [deleting,     setDeleting]     = useState(false);
+  const [copied,       setCopied]       = useState(false);
+
+  function copyContactData() {
+    const lines = [
+      item.contact_name  || "",
+      item.company_name  || "",
+      item.contact_email || "",
+      item.contact_phone || "",
+    ].filter(Boolean).join("\n");
+    navigator.clipboard.writeText(lines).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  const [copiedParticipants, setCopiedParticipants] = useState(false);
+
+  function copyParticipants() {
+    const parts = Array.isArray(item.participants) ? item.participants : [];
+    const lines = parts.map((p, i) =>
+      `${i + 1}. ${p.name}${p.position ? ` (${p.position})` : ""}`
+    ).join("\n");
+    navigator.clipboard.writeText(lines).then(() => {
+      setCopiedParticipants(true);
+      setTimeout(() => setCopiedParticipants(false), 2000);
+    }).catch(() => {});
+  }
 
   const participants = Array.isArray(item.participants) ? item.participants : [];
 
@@ -250,15 +277,20 @@ function RegCard({ item, token, onUpdate, onDelete }) {
         display: "flex", alignItems: "flex-start", gap: 12,
         background: isHandled ? "#FAFFF5" : C.white,
       }}>
-        {/* Avatar firmy */}
-        <div style={{
-          width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-          background: isHandled ? C.greenBg : C.greyBg,
-          border: `1.5px solid ${isHandled ? C.green : C.grey}`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 14, fontWeight: 700, color: isHandled ? C.greenDk : C.greyDk,
-        }}>
-          {(item.company_name || "?").slice(0, 2).toUpperCase()}
+        {/* Avatar firmy — kliknięcie kopiuje dane kontaktowe */}
+        <div
+          onClick={copyContactData}
+          title="Kliknij, aby skopiować dane kontaktowe"
+          style={{
+            width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+            background: copied ? C.greenBg : (isHandled ? C.greenBg : C.greyBg),
+            border: `1.5px solid ${copied ? C.green : (isHandled ? C.green : C.grey)}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: copied ? 18 : 14, fontWeight: 700,
+            color: copied ? C.green : (isHandled ? C.greenDk : C.greyDk),
+            cursor: "pointer", transition: "all .2s", userSelect: "none",
+          }}>
+          {copied ? "✓" : (item.company_name || "?").slice(0, 2).toUpperCase()}
         </div>
 
         {/* Dane główne */}
@@ -295,9 +327,13 @@ function RegCard({ item, token, onUpdate, onDelete }) {
 
       {/* ── Uczestnicy ──────────────────────────────────────────────────── */}
       {participants.length > 0 && (
-        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.grey}`, background: "#FDFDFD" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.greyMid, marginBottom: 6 }}>
+        <div
+          onClick={copyParticipants}
+          title="Kliknij, aby skopiować uczestników"
+          style={{ padding: "10px 16px", borderBottom: `1px solid ${C.grey}`, background: copiedParticipants ? "#F0FFF4" : "#FDFDFD", cursor: "pointer", transition: "background .2s", userSelect: "none" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: copiedParticipants ? C.green : C.greyMid, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
             👥 Uczestnicy ({participants.length})
+            {copiedParticipants && <span style={{ fontSize: 9, color: C.green }}>✓ skopiowano</span>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {participants.map((p, i) => (
@@ -416,7 +452,6 @@ export function AdminRegistrations({ token, refreshKey }) {
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState("");
   const [filter,        setFilter]        = useState("all");
-  const [search,        setSearch]        = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -437,10 +472,6 @@ export function AdminRegistrations({ token, refreshKey }) {
   const filtered = registrations.filter(r => {
     if (filter === "pending" && r.is_handled)  return false;
     if (filter === "handled" && !r.is_handled) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return [r.company_name, r.contact_name, r.contact_email, r.course, r.nip].some(v => (v || "").toLowerCase().includes(q));
-    }
     return true;
   });
 
@@ -463,11 +494,6 @@ export function AdminRegistrations({ token, refreshKey }) {
             {handledCount > 0 && <span style={{ marginLeft: 8, color: C.greenDk, fontWeight: 700 }}>· {handledCount} obsłużonych</span>}
           </div>
         </div>
-
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Szukaj firmy, osoby, kursu…"
-          style={{ padding: "8px 12px", border: `1px solid ${C.grey}`, borderRadius: 8, fontSize: 12, color: C.black, outline: "none", width: 200, fontFamily: "inherit" }}
-        />
 
         <div style={{ display: "flex", gap: 4 }}>
           {[["all", "Wszystkie"], ["pending", "Oczekujące"], ["handled", "Obsłużone"]].map(([val, label]) => (
