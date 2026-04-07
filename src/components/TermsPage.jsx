@@ -41,7 +41,7 @@ export function TermsPage() {
               {TERMS_TITLE}
             </h1>
             <div style={{ background: C.white, borderRadius: 8, padding: "8px 12px", display: "inline-flex" }}>
-              <img src="/logo.png" alt="ENGEL" style={{ height: 26, width: "auto", display: "block" }} />
+              <img src="/logo-header.png" alt="ENGEL" style={{ height: 26, width: "auto", display: "block" }} />
             </div>
           </div>
 
