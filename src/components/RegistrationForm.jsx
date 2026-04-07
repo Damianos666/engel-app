@@ -217,10 +217,8 @@ export function RegistrationForm() {
       minHeight: "100vh",
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
-      overflowY: "auto",
-      WebkitOverflowScrolling: "touch",
     }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 20px 80px", boxSizing: "border-box" }}>
+      <div className="reg-wrap" style={{ margin: "0 auto", padding: "28px 20px 140px", boxSizing: "border-box" }}>
 
         {status === "ok" && (
           <div style={{
