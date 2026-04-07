@@ -128,7 +128,7 @@ function ParticipantRow({ idx, data, onChange, onRemove, canRemove }) {
           </button>
         )}
       </div>
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+      <div className="reg-grid-2">
         <Field label="Imię i nazwisko" required>
           <Input value={data.name} onChange={e => onChange("name", e.target.value)} placeholder="Jan Kowalski" />
         </Field>
@@ -218,7 +218,7 @@ export function RegistrationForm() {
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
     }}>
-      <div className="reg-wrap" style={{ margin: "0 auto", padding: "28px 20px 140px", boxSizing: "border-box" }}>
+      <div className="reg-wrap-inner">
 
         {status === "ok" && (
           <div style={{
@@ -259,7 +259,7 @@ export function RegistrationForm() {
 
             {/* Dane szkolenia — bez pola adres (pkt 2) */}
             <Section title="Dane szkolenia" hint="Nazwa kursu i termin">
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
+              <div className="reg-grid-2-1">
                 <Field label="Nazwa kursu" required>
                   <Input value={course} onChange={e => setCourse(e.target.value)} placeholder="np. ENGEL e-mac" required />
                 </Field>
@@ -271,7 +271,7 @@ export function RegistrationForm() {
 
             {/* Dane firmy */}
             <Section title="Dane firmy (do faktury)" hint="Nazwa firmy, NIP, dodatkowe info">
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+              <div className="reg-grid-2">
                 <Field label="Nazwa firmy" required>
                   <Input value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Sp. z o.o." required />
                 </Field>
@@ -288,7 +288,7 @@ export function RegistrationForm() {
 
             {/* Osoba kontaktowa — 4 pola w jednym rzędzie na desktopie */}
             <Section title="Osoba kontaktowa" hint="Telefon + e-mail do potwierdzeń">
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+              <div className="reg-grid-auto-200">
                 <Field label="Imię i nazwisko" required>
                   <Input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Anna Nowak" required />
                 </Field>
@@ -307,7 +307,7 @@ export function RegistrationForm() {
             {/* Uczestnicy — 2 kolumny na szerokim ekranie */}
             <Section title="Uczestnicy" hint="Min. 1 uczestnik">
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))" }}>
+                <div className="reg-grid-participants">
                   {participants.map((p, i) => (
                     <ParticipantRow
                       key={i} idx={i} data={p}
