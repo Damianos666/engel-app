@@ -66,30 +66,55 @@ button:focus-visible {
 }
 
 /* Responsive Form layout helpers */
-.reg-wrap-inner {
+
+/* reg-wrap-inner: używany przez /rejestracja */
+/* reg-wrap: używany przez /regulamin — identyczne wymiary na desktopie */
+.reg-wrap-inner,
+.reg-wrap {
   margin: 0 auto;
-  padding: 32px 0 140px;
   box-sizing: border-box;
   width: 70%;
   max-width: 1200px;
 }
 
+.reg-wrap-inner {
+  padding: 32px 0 140px;
+}
+
+.reg-wrap {
+  padding: 28px 0 80px;
+}
+
 @media (max-width: 900px) {
-  .reg-wrap-inner {
+  .reg-wrap-inner,
+  .reg-wrap {
     width: 90%;
   }
 }
 
+/* Na mobile: regulamin dopasowuje się do szerokości formularza rejestracji */
 @media (max-width: 768px) {
-  .reg-wrap-inner {
+  .reg-wrap-inner,
+  .reg-wrap {
     width: 100%;
+  }
+
+  .reg-wrap-inner {
     padding: 20px 16px 100px;
+  }
+
+  .reg-wrap {
+    padding: 20px 16px 80px;
   }
 }
 
 @media (max-width: 480px) {
   .reg-wrap-inner {
     padding: 16px 10px 100px;
+  }
+
+  .reg-wrap {
+    padding: 16px 10px 80px;
   }
 }
 
@@ -108,7 +133,7 @@ button:focus-visible {
 .reg-grid-2-1 {
   display: grid;
   gap: 12px;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
 @media (max-width: 768px) {
