@@ -31,7 +31,7 @@ export function TermsPage() {
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
     }}>
-      <div className="reg-wrap">
+      <div className="reg-wrap" style={{ margin: "0 auto", padding: "28px 20px 80px", boxSizing: "border-box" }}>
         
         <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden" }}>
           
