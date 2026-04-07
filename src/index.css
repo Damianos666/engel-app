@@ -64,3 +64,65 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Responsive Form layout helpers */
+.reg-wrap-inner {
+  margin: 0 auto;
+  padding: 28px 20px 140px;
+  box-sizing: border-box;
+  max-width: 1400px;
+}
+
+@media (max-width: 600px) {
+  .reg-wrap-inner {
+    padding: 16px 10px 100px; /* smaller margins on mobile */
+  }
+}
+
+.reg-grid-2 {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 500px) {
+  .reg-grid-2 {
+    grid-template-columns: 1fr; /* stack vertically on small screens */
+  }
+}
+
+.reg-grid-2-1 {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 2fr 1fr;
+}
+
+@media (max-width: 500px) {
+  .reg-grid-2-1 {
+    grid-template-columns: 1fr; /* stack vertically */
+  }
+}
+
+.reg-grid-auto-200 {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+@media (max-width: 500px) {
+  .reg-grid-auto-200 {
+    grid-template-columns: 1fr; /* stack vertically */
+  }
+}
+
+.reg-grid-participants {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+@media (max-width: 400px) {
+  .reg-grid-participants {
+    grid-template-columns: 1fr;
+  }
+}
