@@ -13,6 +13,7 @@ const AdminTrainings     = lazy(() => import("./AdminTrainings").then(m => ({ de
 const AdminSchedule      = lazy(() => import("./AdminSchedule").then(m => ({ default: m.AdminSchedule })));
 const AdminBatchComplete = lazy(() => import("./AdminBatchComplete").then(m => ({ default: m.AdminBatchComplete })));
 const AdminInterested    = lazy(() => import("./AdminInterested").then(m => ({ default: m.AdminInterested })));
+const AdminRegistrations = lazy(() => import("./AdminRegistrations").then(m => ({ default: m.AdminRegistrations })));
 // ScheduleTab (chunk client-tabs) — lazy żeby admin chunk nie wciągał kodu klienta
 const ScheduleTab        = lazy(() => import("../ScheduleTab").then(m => ({ default: m.ScheduleTab })));
 const LOGO_URL = "/logo.png";
@@ -26,6 +27,7 @@ const ADMIN_TABS = [
   ["Edytor szkoleń", "📋"],
   ["Zaliczenia",     "🎓"],
   ["Zgłoszenia",     "🙋"],
+  ["Rejestracje",    "📩"],
 ];
 
 // Mobile: bez "Terminarz w.k." — zastąpiona długim przytrzymaniem
@@ -34,6 +36,7 @@ const MOBILE_TABS = [
   ["Wiadomości", "✉",  2],  // długie przytrzymanie → Edytor szkoleń
   ["Zaliczenia", "🎓", 4],
   ["Zgłoszenia", "🙋", 5],
+  ["Rejestracje","📩", 6],
 ];
 
 const STORAGE_KEY_SCHEDULE_VIEW = "eea_admin_schedule_view"; // "admin" | "client"
@@ -58,8 +61,10 @@ function useIsDesktop() {
 export function AdminPanel({ user, onLogout }) {
   const [tab,                setTabRaw]            = useState(0);
   const [interestedCount,    setInterestedCount]   = useState(0);
-  const [scheduleRefreshKey,   setScheduleRefreshKey]   = useState(0);
-  const [interestedRefreshKey, setInterestedRefreshKey] = useState(0);
+  const [registrationsCount, setRegistrationsCount] = useState(0);
+  const [scheduleRefreshKey,     setScheduleRefreshKey]     = useState(0);
+  const [interestedRefreshKey,   setInterestedRefreshKey]   = useState(0);
+  const [registrationsRefreshKey,setRegistrationsRefreshKey] = useState(0);
   const prevTabRef = useRef(null);
 
   // mount-on-first-visit — każdy panel admina ładuje chunk przy pierwszym kliknięciu
@@ -69,6 +74,7 @@ export function AdminPanel({ user, onLogout }) {
     const prev = prevTabRef.current;
     if (newTab === 0 && prev !== 0) setScheduleRefreshKey(k => k + 1);
     if (newTab === 5 && prev !== 5) setInterestedRefreshKey(k => k + 1);
+    if (newTab === 6 && prev !== 6) setRegistrationsRefreshKey(k => k + 1);
     prevTabRef.current = newTab;
     setTabRaw(newTab);
     if (!visited[newTab]) setVisited(p => ({ ...p, [newTab]: true }));
@@ -171,6 +177,44 @@ export function AdminPanel({ user, onLogout }) {
     return () => {
       if (realtimeUnsub.current) { realtimeUnsub.current(); realtimeUnsub.current = null; }
     };
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Badge dla nowych rejestracji z formularza /rejestracja
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const lastRegAt = useRef(null);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const checkRegistrations = useCallback(async (tok) => {
+    try {
+      const data = await db.get(tok, "training_registrations",
+        "select=id,created_at,company_name,contact_name,is_handled&order=created_at.desc&limit=50"
+      );
+      if (!Array.isArray(data)) return;
+      const pending = data.filter(r => !r.is_handled);
+      setRegistrationsCount(pending.length);
+      if (!data.length) return;
+      const newestAt = data[0].created_at;
+      if (lastRegAt.current && newestAt > lastRegAt.current) {
+        const newOnes = data.filter(r => r.created_at > lastRegAt.current);
+        if ("Notification" in window && Notification.permission === "granted") {
+          newOnes.forEach(item => {
+            new Notification("📩 ENGEL Expert Academy", {
+              body: `Nowa rejestracja: ${item.company_name || item.contact_name || "Nowe zgłoszenie"}`,
+              icon: "/pwa-192.png", badge: "/pwa-192.png",
+              tag: `reg-${item.id}`, renotify: true,
+            });
+          });
+        }
+      }
+      lastRegAt.current = newestAt;
+    } catch { /* cicho ignoruj */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    checkRegistrations(token);
+    // Poll co 2 minuty (brak dedykowanego realtime kanału dla tej tabeli)
+    const interval = setInterval(() => checkRegistrations(token), 2 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -292,6 +336,17 @@ export function AdminPanel({ user, onLogout }) {
                   {interestedCount}
                 </div>
               )}
+              {/* badge Rejestracje */}
+              {desktopIdx === 6 && registrationsCount > 0 && (
+                <div style={{
+                  position: "absolute", top: 4, right: "calc(50% - 14px)",
+                  background: "#2980B9", color: C.white, borderRadius: "50%",
+                  width: 15, height: 15, fontSize: 8, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {registrationsCount}
+                </div>
+              )}
               <span style={{ fontSize: 16, color: isActive ? C.black : C.greyMid }}>
                 {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : icon}
               </span>
@@ -329,6 +384,18 @@ export function AdminPanel({ user, onLogout }) {
                     {interestedCount}
                   </div>
                 )}
+                {/* badge dla Rejestracje (index 6) */}
+                {i === 6 && registrationsCount > 0 && (
+                  <div style={{
+                    marginLeft: "auto",
+                    background: "#2980B9", color: C.white, borderRadius: "50%",
+                    minWidth: 18, height: 18, fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 3px", flexShrink: 0,
+                  }}>
+                    {registrationsCount}
+                  </div>
+                )}
               </button>
             ))}
           </nav>
@@ -350,6 +417,9 @@ export function AdminPanel({ user, onLogout }) {
             </div>
             <div style={tab === 5 ? tabVisible : tabHidden}>
               {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+            </div>
+            <div style={tab === 6 ? tabVisible : tabHidden}>
+              {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} refreshKey={registrationsRefreshKey}/></Suspense>}
             </div>
           </div>
         </div>
@@ -373,6 +443,9 @@ export function AdminPanel({ user, onLogout }) {
           </div>
           <div style={tab === 5 ? tabVisible : tabHidden}>
             {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+          </div>
+          <div style={tab === 6 ? tabVisible : tabHidden}>
+            {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} refreshKey={registrationsRefreshKey}/></Suspense>}
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import { UserContext, useUser } from "./lib/UserContext";
 import { Header, Spinner } from "./components/SharedUI";
 import { LoginScreen, ResetPasswordForm, parseHashParams, clearHashFromUrl } from "./components/Login";
 import { TabBar } from "./components/TabBar";
+import { RegistrationForm } from "./components/RegistrationForm";
 
 // ─── LAZY IMPORTS: wszystkie taby i panele ────────────────────────────────
 // Każda rola dostaje swój zestaw chunków — klient nie pobiera kodu admina
@@ -477,6 +478,11 @@ function AppRoot({ onMounted }) {
     setUser: setUserRaw,
     progress,
   }), [user, progress]);
+
+  // ── Publiczna strona /rejestracja — bez logowania ─────────────────────
+  if (window.location.pathname === "/rejestracja") {
+    return <RegistrationForm />;
+  }
 
   if (!sessionChecked) return (
     <div style={styles.loadingWrapper}>
