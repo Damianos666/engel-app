@@ -152,6 +152,7 @@ export function RegistrationForm() {
   const [contactPos,   setContactPos]   = useState(prefill.contactPos   || "");
   const [contactPhone, setContactPhone] = useState(prefill.contactPhone || "");
   const [contactEmail, setContactEmail] = useState(prefill.contactEmail || "");
+  const [invoiceNote,  setInvoiceNote]  = useState(prefill.invoiceNote  || "");
   const [participants, setParticipants] = useState([{ name: "", position: "" }]);
   const [terms,        setTerms]        = useState(false);
   const [rodo,         setRodo]         = useState(false);
@@ -161,8 +162,8 @@ export function RegistrationForm() {
 
   /* Autosave danych (bez uczestników) do localStorage */
   useEffect(() => {
-    savePrefill({ course, term, company, nip, contactName, contactPos, contactPhone, contactEmail });
-  }, [course, term, company, nip, contactName, contactPos, contactPhone, contactEmail]);
+    savePrefill({ course, term, company, nip, invoiceNote, contactName, contactPos, contactPhone, contactEmail });
+  }, [course, term, company, nip, invoiceNote, contactName, contactPos, contactPhone, contactEmail]);
 
   function addParticipant() { setParticipants(p => [...p, { name: "", position: "" }]); }
   function removeParticipant(idx) { setParticipants(p => p.filter((_, i) => i !== idx)); }
@@ -193,6 +194,7 @@ export function RegistrationForm() {
         contact_position:  contactPos.trim(),
         contact_phone:     contactPhone.trim(),
         contact_email:     contactEmail.trim(),
+        invoice_note:      invoiceNote.trim() || null,
         participants:      participants.map(p => ({ name: p.name.trim(), position: p.position.trim() })),
         participants_note: participantsNote,
         consent_terms:     terms,
@@ -273,7 +275,7 @@ export function RegistrationForm() {
             </Section>
 
             {/* Dane firmy */}
-            <Section title="Dane firmy (do faktury)" hint="Nazwa firmy, NIP">
+            <Section title="Dane firmy (do faktury)" hint="Nazwa firmy, NIP, dodatkowe info">
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
                 <Field label="Nazwa firmy" required>
                   <Input value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Sp. z o.o." required />
@@ -281,6 +283,11 @@ export function RegistrationForm() {
                 <Field label="NIP" required>
                   <Input value={nip} onChange={e => setNip(e.target.value)} placeholder="000-000-00-00" required />
                 </Field>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Field label="Dodatkowe informacje do faktury">
+                    <Input value={invoiceNote} onChange={e => setInvoiceNote(e.target.value)} placeholder="np. KSeF lub dodatkowe numery zamówienia" />
+                  </Field>
+                </div>
               </div>
             </Section>
 
