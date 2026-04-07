@@ -68,14 +68,28 @@ button:focus-visible {
 /* Responsive Form layout helpers */
 .reg-wrap-inner {
   margin: 0 auto;
-  padding: 28px 20px 140px;
+  padding: 32px 0 140px;
   box-sizing: border-box;
-  max-width: 1400px;
+  width: 70%;
+  max-width: 1200px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .reg-wrap-inner {
-    padding: 16px 10px 100px; /* smaller margins on mobile */
+    width: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .reg-wrap-inner {
+    width: 100%;
+    padding: 20px 16px 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reg-wrap-inner {
+    padding: 16px 10px 100px;
   }
 }
 
@@ -85,9 +99,9 @@ button:focus-visible {
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 500px) {
+@media (max-width: 768px) {
   .reg-grid-2 {
-    grid-template-columns: 1fr; /* stack vertically on small screens */
+    grid-template-columns: 1fr;
   }
 }
 
@@ -97,9 +111,9 @@ button:focus-visible {
   grid-template-columns: 2fr 1fr;
 }
 
-@media (max-width: 500px) {
+@media (max-width: 768px) {
   .reg-grid-2-1 {
-    grid-template-columns: 1fr; /* stack vertically */
+    grid-template-columns: 1fr;
   }
 }
 
@@ -109,9 +123,9 @@ button:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
-@media (max-width: 500px) {
+@media (max-width: 768px) {
   .reg-grid-auto-200 {
-    grid-template-columns: 1fr; /* stack vertically */
+    grid-template-columns: 1fr;
   }
 }
 
@@ -121,7 +135,7 @@ button:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
 
-@media (max-width: 400px) {
+@media (max-width: 768px) {
   .reg-grid-participants {
     grid-template-columns: 1fr;
   }
