@@ -28,6 +28,7 @@
       }
 
       /* Strona /rejestracja — pełne scrollowanie */
+      html.rejestracja-page,
       body.rejestracja-page {
         overflow: auto !important;
         overflow-x: hidden !important;
@@ -105,6 +106,7 @@
           box-shadow: 0 8px 40px rgba(0,0,0,0.25) !important;
         }
         /* Strona /rejestracja na desktopie — pełna szerokość, bez ograniczeń */
+        html.rejestracja-page,
         body.rejestracja-page {
           background: #f0f0f0 !important;
           overflow: auto !important;
@@ -200,8 +202,8 @@
           overflow: hidden;
         }
         /* Wyjątek: strona /rejestracja musi się przewijać */
-        body.rejestracja-page,
-        body.rejestracja-page html {
+        html.rejestracja-page,
+        body.rejestracja-page {
           width: 100% !important;
           height: auto !important;
           overflow: auto !important;
