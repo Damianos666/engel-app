@@ -1,10 +1,16 @@
 /**
  * RegistrationForm — publiczny formularz zgłoszeniowy
  * Dostępny bez logowania pod ścieżką /rejestracja
- * Po wypełnieniu → zapis do tabeli training_registrations w Supabase
+ *
+ * Zmiany v2:
+ *  1. Dane (oprócz uczestników) zapisywane w localStorage → prefill przy powrocie
+ *  2. Usunięte pole adres/lokalizacja
+ *  3. Logo: logo-header.png na ciemnym tle
+ *  4. Szerszy kontener na desktopie (max-width 1400px)
+ *  5. Pełne scrollowanie strony
  */
 
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { SB_URL } from "../lib/supabase";
 
 const SB_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -20,10 +26,20 @@ const C = {
   red:     "#C0392B",
 };
 
-/* ─── Supabase public insert (bez tokena — używa anon key) ─────────────── */
+/* localStorage helpers */
+const LS_KEY = "eea_reg_prefill";
+function loadPrefill() {
+  try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : {}; }
+  catch { return {}; }
+}
+function savePrefill(d) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {}
+}
+
+/* Supabase public insert */
 async function insertRegistration(payload) {
   const r = await fetch(`${SB_URL}/rest/v1/training_registrations`, {
-    method:  "POST",
+    method: "POST",
     headers: {
       "apikey":        SB_ANON,
       "Authorization": `Bearer ${SB_ANON}`,
@@ -32,13 +48,10 @@ async function insertRegistration(payload) {
     },
     body: JSON.stringify(payload),
   });
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(txt);
-  }
+  if (!r.ok) throw new Error(await r.text());
 }
 
-/* ─── Tiny helpers ──────────────────────────────────────────────────────── */
+/* ─── Tiny UI helpers ───────────────────────────────────────────────────── */
 function Field({ label, required, children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -50,176 +63,142 @@ function Field({ label, required, children }) {
   );
 }
 
-const inputStyle = {
-  width: "100%",
-  padding: "10px 12px",
-  border: `1px solid #C8C8C8`,
-  borderRadius: 8,
-  fontSize: 13,
-  color: C.black,
-  background: C.white,
-  outline: "none",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-};
-
-const inputFocusStyle = {
-  borderColor: C.green,
-  boxShadow: "0 0 0 3px rgba(138,183,62,.20)",
-};
-
-function Input({ onFocus, onBlur, style, ...props }) {
+function Input({ style, ...props }) {
   const [focused, setFocused] = useState(false);
   return (
     <input
       {...props}
-      style={{ ...inputStyle, ...(focused ? inputFocusStyle : {}), ...style }}
-      onFocus={() => { setFocused(true); onFocus?.(); }}
-      onBlur={() => { setFocused(false); onBlur?.(); }}
+      style={{
+        width: "100%", padding: "10px 12px",
+        border: `1px solid ${focused ? C.green : "#C8C8C8"}`,
+        borderRadius: 8, fontSize: 13, color: C.black,
+        background: C.white, outline: "none",
+        boxSizing: "border-box", fontFamily: "inherit",
+        boxShadow: focused ? "0 0 0 3px rgba(138,183,62,.20)" : "none",
+        transition: "border-color .15s, box-shadow .15s",
+        ...style,
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
     />
   );
 }
 
-/* ─── Participant row ───────────────────────────────────────────────────── */
+function Section({ title, hint, children }) {
+  return (
+    <div style={{ border: `1px solid ${C.grey}`, borderRadius: 10, padding: "14px 16px", background: C.white }}>
+      <div style={{
+        display: "flex", alignItems: "baseline", justifyContent: "space-between",
+        gap: 12, paddingBottom: 10, marginBottom: 12, borderBottom: `1px solid ${C.grey}`,
+      }}>
+        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: .3, textTransform: "uppercase", color: C.greyDk }}>
+          {title}
+        </h2>
+        {hint && <span style={{ fontSize: 11, color: C.greyMid }}>{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ConsentRow({ checked, onChange, id, label, hint }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
+        style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0, accentColor: C.green }} />
+      <div>
+        <label htmlFor={id} style={{ fontSize: 13, color: C.black, lineHeight: 1.4, display: "block" }}>{label}</label>
+        {hint && <div style={{ fontSize: 11, color: C.greyMid, marginTop: 4 }}>{hint}</div>}
+      </div>
+    </div>
+  );
+}
+
 function ParticipantRow({ idx, data, onChange, onRemove, canRemove }) {
   return (
-    <div style={{
-      border: `1px solid ${C.grey}`,
-      borderRadius: 10,
-      padding: "12px 14px",
-      background: "#FAFAFA",
-      display: "flex",
-      flexDirection: "column",
-      gap: 10,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{
-          fontSize: 11, fontWeight: 700, color: C.greyDk,
-          border: `1px solid ${C.grey}`, borderRadius: 999,
-          padding: "3px 10px", background: C.white,
-        }}>
+    <div style={{ border: `1px solid ${C.grey}`, borderRadius: 10, padding: "12px 14px", background: "#FAFAFA" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.greyDk, border: `1px solid ${C.grey}`, borderRadius: 999, padding: "3px 10px", background: C.white }}>
           Uczestnik #{idx + 1}
         </span>
         {canRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            style={{
-              border: `1px solid rgba(192,57,43,.35)`, borderRadius: 6,
-              background: C.white, color: "#7a1a12",
-              padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onRemove}
+            style={{ border: "1px solid rgba(192,57,43,.35)", borderRadius: 6, background: C.white, color: "#7a1a12", padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
             Usuń
           </button>
         )}
       </div>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
         <Field label="Imię i nazwisko" required>
-          <Input
-            value={data.name}
-            onChange={e => onChange("name", e.target.value)}
-            placeholder="Jan Kowalski"
-          />
+          <Input value={data.name} onChange={e => onChange("name", e.target.value)} placeholder="Jan Kowalski" />
         </Field>
         <Field label="Stanowisko">
-          <Input
-            value={data.position}
-            onChange={e => onChange("position", e.target.value)}
-            placeholder="Inżynier utrzymania ruchu"
-          />
+          <Input value={data.position} onChange={e => onChange("position", e.target.value)} placeholder="Inżynier UR" />
         </Field>
       </div>
     </div>
   );
 }
 
-/* ─── Main component ────────────────────────────────────────────────────── */
+/* ─── Main ──────────────────────────────────────────────────────────────── */
 export function RegistrationForm() {
-  const [course,         setCourse]         = useState("");
-  const [address,        setAddress]        = useState("");
-  const [term,           setTerm]           = useState("");
-  const [company,        setCompany]        = useState("");
-  const [nip,            setNip]            = useState("");
-  const [contactName,    setContactName]    = useState("");
-  const [contactPos,     setContactPos]     = useState("");
-  const [contactPhone,   setContactPhone]   = useState("");
-  const [contactEmail,   setContactEmail]   = useState("");
-  const [participants,   setParticipants]   = useState([{ name: "", position: "" }]);
-  const [terms,          setTerms]          = useState(false);
-  const [rodo,           setRodo]           = useState(false);
-  const [status,         setStatus]         = useState(null); // null | "ok" | "err"
-  const [errMsg,         setErrMsg]         = useState("");
-  const [submitting,     setSubmitting]     = useState(false);
-  const formRef = useRef(null);
+  const prefill = loadPrefill();
 
-  function addParticipant() {
-    setParticipants(p => [...p, { name: "", position: "" }]);
-  }
+  const [course,       setCourse]       = useState(prefill.course       || "");
+  const [term,         setTerm]         = useState(prefill.term         || "");
+  const [company,      setCompany]      = useState(prefill.company      || "");
+  const [nip,          setNip]          = useState(prefill.nip          || "");
+  const [contactName,  setContactName]  = useState(prefill.contactName  || "");
+  const [contactPos,   setContactPos]   = useState(prefill.contactPos   || "");
+  const [contactPhone, setContactPhone] = useState(prefill.contactPhone || "");
+  const [contactEmail, setContactEmail] = useState(prefill.contactEmail || "");
+  const [participants, setParticipants] = useState([{ name: "", position: "" }]);
+  const [terms,        setTerms]        = useState(false);
+  const [rodo,         setRodo]         = useState(false);
+  const [status,       setStatus]       = useState(null);
+  const [errMsg,       setErrMsg]       = useState("");
+  const [submitting,   setSubmitting]   = useState(false);
 
-  function removeParticipant(idx) {
-    setParticipants(p => p.filter((_, i) => i !== idx));
-  }
+  /* Autosave danych (bez uczestników) do localStorage */
+  useEffect(() => {
+    savePrefill({ course, term, company, nip, contactName, contactPos, contactPhone, contactEmail });
+  }, [course, term, company, nip, contactName, contactPos, contactPhone, contactEmail]);
 
-  function updateParticipant(idx, field, val) {
-    setParticipants(p => p.map((r, i) => i === idx ? { ...r, [field]: val } : r));
-  }
+  function addParticipant() { setParticipants(p => [...p, { name: "", position: "" }]); }
+  function removeParticipant(idx) { setParticipants(p => p.filter((_, i) => i !== idx)); }
+  function updateParticipant(idx, field, val) { setParticipants(p => p.map((r, i) => i === idx ? { ...r, [field]: val } : r)); }
 
   async function handleSubmit(e) {
     e.preventDefault();
-
-    // Walidacja uczestników
     for (let i = 0; i < participants.length; i++) {
       if (!participants[i].name.trim()) {
-        setStatus("err");
-        setErrMsg(`Uczestnik #${i + 1}: brak imienia i nazwiska.`);
-        return;
+        setStatus("err"); setErrMsg(`Uczestnik #${i + 1}: brak imienia i nazwiska.`); return;
       }
     }
+    if (!terms || !rodo) { setStatus("err"); setErrMsg("Zaznacz obowiązkowe zgody."); return; }
 
-    if (!terms || !rodo) {
-      setStatus("err");
-      setErrMsg("Zaznacz obowiązkowe zgody, aby kontynuować.");
-      return;
-    }
+    setSubmitting(true); setStatus(null);
 
-    setSubmitting(true);
-    setStatus(null);
-
-    // Uczestnicy jako tekst do notatek — jeden wiersz per uczestnik
     const participantsNote = participants
-      .map((p, i) => {
-        const pos = p.position ? ` (${p.position})` : "";
-        return `${i + 1}. ${p.name.trim()}${pos}`;
-      })
+      .map((p, i) => `${i + 1}. ${p.name.trim()}${p.position ? ` (${p.position})` : ""}`)
       .join("\n");
 
-    const payload = {
-      course:         course.trim(),
-      address:        address.trim(),
-      term:           term || null,
-      company_name:   company.trim(),
-      nip:            nip.trim(),
-      contact_name:   contactName.trim(),
-      contact_position: contactPos.trim(),
-      contact_phone:  contactPhone.trim(),
-      contact_email:  contactEmail.trim(),
-      participants:   participants.map(p => ({
-        name:     p.name.trim(),
-        position: p.position.trim(),
-      })),
-      participants_note: participantsNote,
-      consent_terms: terms,
-      consent_rodo:  rodo,
-    };
-
     try {
-      await insertRegistration(payload);
+      await insertRegistration({
+        course:            course.trim(),
+        term:              term || null,
+        company_name:      company.trim(),
+        nip:               nip.trim(),
+        contact_name:      contactName.trim(),
+        contact_position:  contactPos.trim(),
+        contact_phone:     contactPhone.trim(),
+        contact_email:     contactEmail.trim(),
+        participants:      participants.map(p => ({ name: p.name.trim(), position: p.position.trim() })),
+        participants_note: participantsNote,
+        consent_terms:     terms,
+        consent_rodo:      rodo,
+      });
       setStatus("ok");
-      // Reset formularza
-      setCourse(""); setAddress(""); setTerm("");
-      setCompany(""); setNip("");
-      setContactName(""); setContactPos(""); setContactPhone(""); setContactEmail("");
       setParticipants([{ name: "", position: "" }]);
       setTerms(false); setRodo(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -231,72 +210,41 @@ export function RegistrationForm() {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{
       minHeight: "100vh",
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
-      padding: "28px 16px 60px",
-      boxSizing: "border-box",
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
     }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 20px 80px", boxSizing: "border-box" }}>
 
-        {/* ── Sukces globalny ───────────────────────────────────────────── */}
         {status === "ok" && (
           <div style={{
-            marginBottom: 20,
-            padding: "16px 20px",
-            borderRadius: 10,
-            background: "rgba(6,118,71,.06)",
-            border: "1px solid rgba(6,118,71,.35)",
-            fontSize: 14,
-            color: "#067647",
-            fontWeight: 600,
-            lineHeight: 1.5,
+            marginBottom: 20, padding: "16px 20px", borderRadius: 10,
+            background: "rgba(6,118,71,.06)", border: "1px solid rgba(6,118,71,.35)",
+            fontSize: 14, color: "#067647", fontWeight: 600, lineHeight: 1.5,
           }}>
             ✅ Zgłoszenie zostało przyjęte! Skontaktujemy się z Tobą wkrótce.
           </div>
         )}
 
-        {/* ── Karta formularza ─────────────────────────────────────────── */}
-        <div style={{
-          background: C.white,
-          border: `1px solid ${C.grey}`,
-          borderRadius: 10,
-          boxShadow: "0 10px 30px rgba(16,24,40,.08)",
-          overflow: "hidden",
-        }}>
+        <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden" }}>
 
           {/* Nagłówek */}
           <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            padding: "16px 20px",
-            borderBottom: `4px solid ${C.green}`,
-            background: C.white,
-            flexWrap: "wrap",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 16, padding: "16px 24px", borderBottom: `4px solid ${C.green}`,
+            background: C.white, flexWrap: "wrap",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{
-                background: C.greyDk,
-                borderRadius: 10,
-                padding: "10px 14px",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <img
-                  src="/logo.png"
-                  alt="ENGEL"
-                  style={{ height: 26, width: "auto", display: "block", mixBlendMode: "screen" }}
-                />
+              {/* pkt 3: logo-header.png na ciemnym tle */}
+              <div style={{ background: "#2C2C2C", borderRadius: 10, padding: "10px 16px", display: "flex", alignItems: "center" }}>
+                <img src="/logo-header.png" alt="ENGEL" style={{ height: 28, width: "auto", display: "block" }} />
               </div>
               <div>
-                <div style={{
-                  fontSize: 16, fontWeight: 700, letterSpacing: .3,
-                  textTransform: "uppercase", color: C.greyDk,
-                }}>
+                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: .3, textTransform: "uppercase", color: C.greyDk }}>
                   Formularz zgłoszeniowy — szkolenie
                 </div>
                 <div style={{ fontSize: 12, color: C.greyMid, marginTop: 3 }}>
@@ -309,17 +257,14 @@ export function RegistrationForm() {
             </div>
           </div>
 
-          {/* Form */}
-          <form ref={formRef} onSubmit={handleSubmit} noValidate style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Formularz */}
+          <form onSubmit={handleSubmit} noValidate style={{ padding: "18px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
 
-            {/* ── Dane szkolenia ─────────────────────────────────────────── */}
-            <Section title="Dane szkolenia" hint="Nazwa kursu, adres, termin">
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+            {/* Dane szkolenia — bez pola adres (pkt 2) */}
+            <Section title="Dane szkolenia" hint="Nazwa kursu i termin">
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
                 <Field label="Nazwa kursu" required>
                   <Input value={course} onChange={e => setCourse(e.target.value)} placeholder="np. ENGEL e-mac" required />
-                </Field>
-                <Field label="Adres / lokalizacja">
-                  <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="np. Schwertberg, Austria" />
                 </Field>
                 <Field label="Termin">
                   <Input type="date" value={term} onChange={e => setTerm(e.target.value)} />
@@ -327,7 +272,7 @@ export function RegistrationForm() {
               </div>
             </Section>
 
-            {/* ── Dane firmy ────────────────────────────────────────────── */}
+            {/* Dane firmy */}
             <Section title="Dane firmy (do faktury)" hint="Nazwa firmy, NIP">
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
                 <Field label="Nazwa firmy" required>
@@ -339,7 +284,7 @@ export function RegistrationForm() {
               </div>
             </Section>
 
-            {/* ── Osoba kontaktowa ─────────────────────────────────────── */}
+            {/* Osoba kontaktowa — 4 pola w jednym rzędzie na desktopie */}
             <Section title="Osoba kontaktowa" hint="Telefon + e-mail do potwierdzeń">
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
                 <Field label="Imię i nazwisko" required>
@@ -357,93 +302,55 @@ export function RegistrationForm() {
               </div>
             </Section>
 
-            {/* ── Uczestnicy ───────────────────────────────────────────── */}
+            {/* Uczestnicy — 2 kolumny na szerokim ekranie */}
             <Section title="Uczestnicy" hint="Min. 1 uczestnik">
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {participants.map((p, i) => (
-                  <ParticipantRow
-                    key={i}
-                    idx={i}
-                    data={p}
-                    onChange={(f, v) => updateParticipant(i, f, v)}
-                    onRemove={() => removeParticipant(i)}
-                    canRemove={participants.length > 1}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={addParticipant}
-                  style={{
-                    alignSelf: "flex-start",
-                    border: `1px solid #C8C8C8`,
-                    borderRadius: 8,
-                    background: C.white,
-                    color: C.greyDk,
-                    padding: "8px 14px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))" }}>
+                  {participants.map((p, i) => (
+                    <ParticipantRow
+                      key={i} idx={i} data={p}
+                      onChange={(f, v) => updateParticipant(i, f, v)}
+                      onRemove={() => removeParticipant(i)}
+                      canRemove={participants.length > 1}
+                    />
+                  ))}
+                </div>
+                <button type="button" onClick={addParticipant}
+                  style={{ alignSelf: "flex-start", border: "1px solid #C8C8C8", borderRadius: 8, background: C.white, color: C.greyDk, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                   + Dodaj uczestnika
                 </button>
                 <div style={{ fontSize: 11, color: C.greyMid }}>
-                  Uczestnicy: imię i nazwisko + stanowisko.
+                  Uczestnik: imię i nazwisko (wymagane) + stanowisko (opcjonalne).
                 </div>
               </div>
             </Section>
 
-            {/* ── Zgody ────────────────────────────────────────────────── */}
+            {/* Zgody */}
             <Section title="Zgody" hint="Akceptacja OWU i RODO">
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-                <ConsentRow
-                  checked={terms}
-                  onChange={setTerms}
-                  id="terms"
+                <ConsentRow checked={terms} onChange={setTerms} id="terms"
                   label={<>Tak, akceptuję Ogólne Warunki Świadczenia Usług Szkoleniowych <span style={{ color: C.green, fontWeight: 900 }}>*</span></>}
                   hint={<a href="/regulamin" target="_blank" rel="noopener" style={{ color: C.greyDk, textDecoration: "underline" }}>Otwórz regulamin</a>}
                 />
-
-                <ConsentRow
-                  checked={rodo}
-                  onChange={setRodo}
-                  id="rodo"
+                <ConsentRow checked={rodo} onChange={setRodo} id="rodo"
                   label={<>Wyrażam zgodę na przetwarzanie podanych danych osobowych <span style={{ color: C.green, fontWeight: 900 }}>*</span></>}
-                  hint={<>Informacje o ochronie danych: <a href="https://www.engelglobal.com/dataprotection" target="_blank" rel="noopener" style={{ color: C.greyDk, textDecoration: "underline" }}>engelglobal.com/dataprotection</a></>}
+                  hint={<>Informacje: <a href="https://www.engelglobal.com/dataprotection" target="_blank" rel="noopener" style={{ color: C.greyDk, textDecoration: "underline" }}>engelglobal.com/dataprotection</a></>}
                 />
 
-                {/* Błąd / sukces inline */}
                 {status === "err" && (
-                  <div style={{
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    background: "rgba(180,35,24,.06)",
-                    border: "1px solid rgba(180,35,24,.35)",
-                    fontSize: 13,
-                    color: C.red,
-                    whiteSpace: "pre-line",
-                  }}>
+                  <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(180,35,24,.06)", border: "1px solid rgba(180,35,24,.35)", fontSize: 13, color: C.red, whiteSpace: "pre-line" }}>
                     {errMsg || "Uzupełnij wymagane pola i zaznacz obowiązkowe zgody."}
                   </div>
                 )}
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
-                  <button
-                    type="submit"
-                    disabled={submitting}
+                <div style={{ marginTop: 4 }}>
+                  <button type="submit" disabled={submitting}
                     style={{
-                      background: submitting ? "#aac672" : C.green,
-                      border: "none",
-                      borderRadius: 8,
-                      color: "#0b0c0d",
-                      padding: "11px 22px",
-                      fontSize: 14,
-                      fontWeight: 700,
-                      cursor: submitting ? "not-allowed" : "pointer",
-                      transition: "background .2s",
-                    }}
-                  >
+                      background: submitting ? "#aac672" : C.green, border: "none",
+                      borderRadius: 8, color: "#0b0c0d", padding: "11px 28px",
+                      fontSize: 14, fontWeight: 700,
+                      cursor: submitting ? "not-allowed" : "pointer", transition: "background .2s",
+                    }}>
                     {submitting ? "Wysyłanie…" : "Wyślij zgłoszenie"}
                   </button>
                 </div>
@@ -456,53 +363,6 @@ export function RegistrationForm() {
         <div style={{ marginTop: 20, textAlign: "center", fontSize: 11, color: C.greyMid }}>
           ENGEL Expert Academy · Formularz zgłoszeniowy
         </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Sub-components ────────────────────────────────────────────────────── */
-function Section({ title, hint, children }) {
-  return (
-    <div style={{
-      border: `1px solid ${C.grey}`,
-      borderRadius: 10,
-      padding: "14px 16px",
-      background: C.white,
-    }}>
-      <div style={{
-        display: "flex", alignItems: "baseline", justifyContent: "space-between",
-        gap: 12, paddingBottom: 10, marginBottom: 12,
-        borderBottom: `1px solid ${C.grey}`,
-      }}>
-        <h2 style={{
-          margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: .3,
-          textTransform: "uppercase", color: C.greyDk,
-        }}>
-          {title}
-        </h2>
-        <span style={{ fontSize: 11, color: C.greyMid }}>{hint}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ConsentRow({ checked, onChange, id, label, hint }) {
-  return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0, accentColor: C.green }}
-      />
-      <div>
-        <label htmlFor={id} style={{ fontSize: 13, color: C.black, lineHeight: 1.4, display: "block" }}>
-          {label}
-        </label>
-        {hint && <div style={{ fontSize: 11, color: C.greyMid, marginTop: 4 }}>{hint}</div>}
       </div>
     </div>
   );

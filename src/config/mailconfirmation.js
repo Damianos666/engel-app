@@ -1,0 +1,98 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  mailconfirmation.js
+//  Szablon maila POTWIERDZAJĄCEGO rejestrację na szkolenie.
+//  Wysyłany do osoby kontaktowej firmy z panelu admina → zakładka Rejestracje.
+//
+//  Dane kontaktowe nadawcy (ENGEL Polska) — ze zmiennych środowiskowych Vite:
+//    VITE_CONTACT_EMAIL  — adres e-mail Zespołu Szkoleniowego
+//    VITE_CONTACT_PHONE  — telefon Zespołu Szkoleniowego
+//    VITE_CONTACT_PERSON — imię i nazwisko osoby kontaktowej po stronie ENGEL
+//
+//  Zmienne dostępne w szablonie:
+//    {contactName}    — imię i nazwisko osoby kontaktowej z firmy klienta
+//    {companyName}    — nazwa firmy klienta
+//    {course}         — nazwa kursu/szkolenia
+//    {term}           — termin szkolenia (sformatowana data lub "—")
+//    {participantsList} — automatycznie generowana lista uczestników (numerowana)
+//    {engelPerson}    — VITE_CONTACT_PERSON
+//    {engelEmail}     — VITE_CONTACT_EMAIL
+//    {engelPhone}     — VITE_CONTACT_PHONE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CONTACT_EMAIL  = import.meta.env.VITE_CONTACT_EMAIL  || "";
+const CONTACT_PHONE  = import.meta.env.VITE_CONTACT_PHONE  || "";
+const CONTACT_PERSON = import.meta.env.VITE_CONTACT_PERSON || "";
+
+// ── Temat maila ──────────────────────────────────────────────────────────────
+// Zmień treść poniżej — {course} zostanie zastąpione nazwą szkolenia.
+export const CONFIRM_SUBJECT = "Potwierdzenie zgłoszenia: {course}";
+
+// ── Treść maila ──────────────────────────────────────────────────────────────
+// Edytuj dowolnie. Zmienne w {nawiasach} są zastępowane automatycznie.
+export const CONFIRM_BODY = `Szanowna/y {contactName},
+
+dziękujemy za przesłanie zgłoszenia na szkolenie organizowane przez ENGEL Polska.
+
+Potwierdzamy rejestrację następujących osób:
+
+  Firma:    {companyName}
+  Kurs:     {course}
+  Termin:   {term}
+
+Lista zgłoszonych uczestników:
+{participantsList}
+
+W razie pytań dotyczących szkolenia, warunków uczestnictwa lub konieczności wprowadzenia zmian prosimy o kontakt:
+
+  {engelPerson}
+  {engelEmail}
+  {engelPhone}
+
+Z poważaniem,
+Zespół Szkoleniowy ENGEL Polska`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  buildConfirmMailtoLink — buduje gotowy link mailto: do użycia w <a href>
+//
+//  Parametry:
+//    contactName   — imię i nazwisko osoby kontaktowej (z formularza)
+//    contactEmail  — email osoby kontaktowej (z formularza)
+//    companyName   — nazwa firmy (z formularza)
+//    course        — nazwa szkolenia (z formularza)
+//    term          — termin (sformatowany string lub "—")
+//    participants  — tablica [{name, position}, ...]
+// ─────────────────────────────────────────────────────────────────────────────
+export function buildConfirmMailtoLink({
+  contactName  = "",
+  contactEmail = "",
+  companyName  = "",
+  course       = "",
+  term         = "—",
+  participants = [],
+}) {
+  // Buduj numerowaną listę uczestników
+  const participantsList = participants.length > 0
+    ? participants
+        .map((p, i) => {
+          const pos = p.position ? ` (${p.position})` : "";
+          return `  ${i + 1}. ${p.name}${pos}`;
+        })
+        .join("\n")
+    : "  (brak danych uczestników)";
+
+  const replace = (str) =>
+    str
+      .replace(/{contactName}/g,     contactName)
+      .replace(/{companyName}/g,     companyName)
+      .replace(/{course}/g,          course)
+      .replace(/{term}/g,            term)
+      .replace(/{participantsList}/g, participantsList)
+      .replace(/{engelPerson}/g,     CONTACT_PERSON)
+      .replace(/{engelEmail}/g,      CONTACT_EMAIL)
+      .replace(/{engelPhone}/g,      CONTACT_PHONE);
+
+  const subject = encodeURIComponent(replace(CONFIRM_SUBJECT));
+  const body    = encodeURIComponent(replace(CONFIRM_BODY));
+
+  return `mailto:${contactEmail}?subject=${subject}&body=${body}`;
+}
