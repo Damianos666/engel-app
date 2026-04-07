@@ -54,7 +54,7 @@ async function insertRegistration(payload) {
 /* ─── Tiny UI helpers ───────────────────────────────────────────────────── */
 function Field({ label, required, children }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
       <label style={{ fontSize: 12, color: C.greyDk, fontWeight: 600 }}>
         {label}{required && <span style={{ color: C.green, marginLeft: 2 }}>*</span>}
       </label>
