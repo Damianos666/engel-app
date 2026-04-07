@@ -12,6 +12,8 @@ import { LoginScreen, ResetPasswordForm, parseHashParams, clearHashFromUrl } fro
 import { TabBar } from "./components/TabBar";
 import { RegistrationForm } from "./components/RegistrationForm";
 
+const TermsPage = lazy(() => import("./components/TermsPage").then(m => ({ default: m.TermsPage })));
+
 // ─── LAZY IMPORTS: wszystkie taby i panele ────────────────────────────────
 // Każda rola dostaje swój zestaw chunków — klient nie pobiera kodu admina
 // ani trenera, trener nie pobiera admina, admin nie pobiera widoku klienta.
@@ -484,6 +486,17 @@ function AppRoot({ onMounted }) {
     document.body.classList.add("rejestracja-page");
     document.documentElement.classList.add("rejestracja-page");
     return <RegistrationForm />;
+  }
+
+  // ── Publiczna strona /regulamin — bez logowania ─────────────────────
+  if (window.location.pathname === "/regulamin") {
+    document.body.classList.add("rejestracja-page");
+    document.documentElement.classList.add("rejestracja-page");
+    return (
+      <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
+        <TermsPage />
+      </Suspense>
+    );
   }
 
   if (!sessionChecked) return (

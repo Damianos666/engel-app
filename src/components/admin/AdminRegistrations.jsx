@@ -123,6 +123,7 @@ function generateRegistrationPDF(item) {
     <div class="grid2">
       <div class="field"><label>Nazwa firmy</label><div class="val">${item.company_name || "—"}</div></div>
       <div class="field"><label>NIP</label><div class="val">${item.nip || "—"}</div></div>
+      ${item.invoice_note ? `<div class="field" style="grid-column: 1 / -1;"><label>Dodatkowe informacje do faktury</label><div class="val" style="color:#C0392B;">${item.invoice_note}</div></div>` : ""}
     </div>
   </div>
 
@@ -299,6 +300,11 @@ function RegCard({ item, token, onUpdate, onDelete }) {
             <span style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{item.company_name || "—"}</span>
             {item.nip && <span style={{ fontSize: 11, color: C.greyMid }}>NIP: {item.nip}</span>}
           </div>
+          {item.invoice_note && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 4, background: "#FDEDEC", padding: "2px 8px", borderRadius: 4, display: "inline-block" }}>
+              Faktura: {item.invoice_note}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: C.greyDk, marginBottom: 2 }}>
             👤 <strong>{item.contact_name || "—"}</strong>
             {item.contact_position && <span style={{ color: C.greyMid }}> · {item.contact_position}</span>}
@@ -447,7 +453,7 @@ function RegCard({ item, token, onUpdate, onDelete }) {
 }
 
 /* ─── Main panel ────────────────────────────────────────────────────────── */
-export function AdminRegistrations({ token, refreshKey }) {
+export function AdminRegistrations({ token, refreshKey, onRegistrationsChange }) {
   const [registrations, setRegistrations] = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState("");
@@ -466,8 +472,14 @@ export function AdminRegistrations({ token, refreshKey }) {
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  function handleUpdate(id, patch) { setRegistrations(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r)); }
-  function handleDelete(id) { setRegistrations(prev => prev.filter(r => r.id !== id)); }
+  function handleUpdate(id, patch) {
+    setRegistrations(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+    if (onRegistrationsChange) onRegistrationsChange();
+  }
+  function handleDelete(id) {
+    setRegistrations(prev => prev.filter(r => r.id !== id));
+    if (onRegistrationsChange) onRegistrationsChange();
+  }
 
   const filtered = registrations.filter(r => {
     if (filter === "pending" && r.is_handled)  return false;

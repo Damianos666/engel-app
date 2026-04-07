@@ -475,7 +475,7 @@ export function AdminPanel({ user, onLogout }) {
               {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
             </div>
             <div style={tab === 6 ? tabVisible : tabHidden}>
-              {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} refreshKey={registrationsRefreshKey}/></Suspense>}
+              {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} onRegistrationsChange={() => checkRegistrations(token)} refreshKey={registrationsRefreshKey}/></Suspense>}
             </div>
           </div>
         </div>
@@ -501,7 +501,7 @@ export function AdminPanel({ user, onLogout }) {
             {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
           </div>
           <div style={tab === 6 ? tabVisible : tabHidden}>
-            {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} refreshKey={registrationsRefreshKey}/></Suspense>}
+            {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} onRegistrationsChange={() => checkRegistrations(token)} refreshKey={registrationsRefreshKey}/></Suspense>}
           </div>
         </div>
       )}
