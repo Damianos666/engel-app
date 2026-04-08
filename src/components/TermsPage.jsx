@@ -35,7 +35,7 @@ export function TermsPage() {
       justifyContent: "center",
       alignItems: "flex-start",
     }}>
-      <div className="public-page-wrap" style={{ width: "100%", maxWidth: 800, margin: "0 auto", boxSizing: "border-box" }}>
+      <div className="public-page-wrap" style={{ width: "100%", maxWidth: 1000, margin: "0 auto", boxSizing: "border-box" }}>
         
         <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden", width: "100%" }}>
           
