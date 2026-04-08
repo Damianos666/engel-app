@@ -270,7 +270,7 @@ export function RegistrationForm() {
                   <Input value={course} onChange={e => setCourse(e.target.value)} placeholder="np. ENGEL e-mac" required />
                 </Field>
                 <Field label="Termin">
-                  <Input type="date" value={term} onChange={e => setTerm(e.target.value)} />
+                  <Input type="date" value={term} onChange={e => setTerm(e.target.value)} style={{ minHeight: "37px" }} />
                 </Field>
               </div>
             </Section>
