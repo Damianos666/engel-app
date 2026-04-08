@@ -376,6 +376,7 @@ function AppRoot({ onMounted }) {
         notif_cert:     profile?.notif_cert     ?? rawUser.notif_cert     ?? true,
         trainer_id:     profile?.trainer_id     ?? rawUser.trainer_id     ?? null,
         trainer_view:   profile?.trainer_view    ?? "client",
+        name_locked:    profile?.name_locked     ?? false,
       };
       u.displayName = u.name;
       u.displayRole = u.stanowisko || "";
