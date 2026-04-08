@@ -70,6 +70,7 @@ function Input({ style, ...props }) {
       {...props}
       style={{
         display: "block",
+        WebkitAppearance: "none", appearance: "none",
         width: "100%", maxWidth: "100%", minWidth: 0, margin: 0, padding: "10px 12px",
         border: `1px solid ${focused ? C.green : "#C8C8C8"}`,
         borderRadius: 8, fontSize: 13, color: C.black,
