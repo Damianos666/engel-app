@@ -234,7 +234,7 @@ export function RegistrationForm() {
           </div>
         )}
 
-        <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden" }}>
+        <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden", width: "100%" }}>
 
           {/* Nagłówek */}
           <div style={{
