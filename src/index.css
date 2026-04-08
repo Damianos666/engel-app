@@ -78,7 +78,7 @@ button:focus-visible {
  * Ujednolicenie eliminuje ten problem.
  */
 .public-page-wrap {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 32px 24px 140px;
   box-sizing: border-box;
@@ -94,8 +94,8 @@ button:focus-visible {
 }
 
 /* Zachowaj aliasy dla wstecznej kompatybilności (gdyby gdzieś indziej były używane) */
-.reg-wrap-inner { max-width: 800px; margin: 0 auto; padding: 32px 24px 140px; box-sizing: border-box; width: 100%; }
-.reg-wrap       { max-width: 800px; margin: 0 auto; box-sizing: border-box; width: 100%; }
+.reg-wrap-inner { max-width: 1000px; margin: 0 auto; padding: 32px 24px 140px; box-sizing: border-box; width: 100%; }
+.reg-wrap       { max-width: 1000px; margin: 0 auto; box-sizing: border-box; width: 100%; }
 
 @media (max-width: 768px) {
   .reg-wrap-inner { padding: 0 0 100px; max-width: 100%; }
