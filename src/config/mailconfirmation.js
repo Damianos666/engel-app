@@ -29,7 +29,7 @@ export const CONFIRM_SUBJECT = "Potwierdzenie zgłoszenia: {course}";
 
 // ── Treść maila ──────────────────────────────────────────────────────────────
 // Edytuj dowolnie. Zmienne w {nawiasach} są zastępowane automatycznie.
-export const CONFIRM_BODY = `Szanowna/y {contactName},
+export const CONFIRM_BODY = `Dzień dobry, {contactName},
 
 dziękujemy za przesłanie zgłoszenia na szkolenie organizowane przez ENGEL Polska.
 
