@@ -215,10 +215,14 @@ export function RegistrationForm() {
   return (
     <div style={{
       minHeight: "100vh",
+      width: "100%",
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "flex-start",
     }}>
-      <div className="reg-wrap-inner">
+      <div className="public-page-wrap">
 
         {status === "ok" && (
           <div style={{

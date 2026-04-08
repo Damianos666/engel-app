@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta id="meta-viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ENGEL Expert Academy" />
@@ -12,6 +12,15 @@
     <link rel="apple-touch-icon" href="/pwa-192.png" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>ENGEL expert academy</title>
+
+    <!-- Usunięcie blokady przybliżania (viewport) na stronach publicznych -->
+    <script>
+      var path = window.location.pathname;
+      if (path === '/rejestracja' || path === '/regulamin') {
+        var vp = document.getElementById('meta-viewport');
+        if (vp) vp.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover');
+      }
+    </script>
 
     <!-- --safe-bottom startuje od 0; React hook useSafeArea() ustawi realną wartość po renderze -->
     <script>
@@ -33,17 +42,21 @@
         overflow: auto !important;
         overflow-x: hidden !important;
         height: auto !important;
+        width: auto !important;
         overscroll-behavior: auto !important;
       }
+      html.rejestracja-page *,
+      body.rejestracja-page * {
+        touch-action: auto !important;
+      }
       body.rejestracja-page #root {
+        display: block !important;
         overflow: auto !important;
         height: auto !important;
         min-height: 100vh !important;
         width: 100% !important;
-      }
-      .reg-wrap {
-        width: 100%;
-        max-width: 800px;
+        transform: none !important;
+        zoom: 1 !important;
       }
 
       /* ── Splash screen ────────────────────────────────────────────────── */
@@ -122,10 +135,6 @@
           overflow: auto !important;
           align-items: unset !important;
           justify-content: unset !important;
-        }
-        .reg-wrap {
-          width: 70% !important;
-          max-width: none !important;
         }
         .app-container.admin-desktop {
           width: min(96vw, 1200px) !important;
@@ -281,6 +290,12 @@
         document.documentElement.style.setProperty('--app-height', h + 'px');
 
         var root = document.getElementById('root');
+        
+        // Nie migaj root-em na stronach publicznych
+        if (document.documentElement.classList.contains('rejestracja-page')) {
+          return;
+        }
+        
         if (root) {
           root.style.display = 'none';
           void root.offsetHeight;

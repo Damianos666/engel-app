@@ -28,10 +28,14 @@ export function TermsPage() {
   return (
     <div style={{
       minHeight: "100vh",
+      width: "100%",
       background: C.greyBg,
       fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "flex-start",
     }}>
-      <div className="reg-wrap" style={{ margin: "0 auto", padding: "28px 20px 80px", boxSizing: "border-box" }}>
+      <div className="public-page-wrap">
         
         <div style={{ background: C.white, border: `1px solid ${C.grey}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(16,24,40,.08)", overflow: "hidden" }}>
           
