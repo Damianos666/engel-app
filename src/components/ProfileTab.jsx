@@ -16,7 +16,7 @@ const GramTab = lazy(() => import("./GramTab").then(m => ({ default: m.GramTab }
  * Wyświetlany PRZED zapisem gdy user zmienia imię/nazwisko.
  * Po potwierdzeniu: zapis + name_locked=true → pole blokuje się na zawsze.
  */
-function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
+function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel, T }) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
@@ -33,18 +33,17 @@ function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
           borderBottom: `4px solid #e67e22`,
         }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>
-            ⚠️ Zmiana imienia i nazwiska
+            {T.name_lock_modal_title}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 4 }}>
-            Ta operacja jest jednorazowa i nieodwracalna
+            {T.name_lock_modal_subtitle}
           </div>
         </div>
 
         {/* Body */}
         <div style={{ padding: "20px 20px 0" }}>
           <div style={{ fontSize: 13, color: C.greyDk, lineHeight: 1.6, marginBottom: 16 }}>
-            Imię i nazwisko jest drukowane na certyfikatach. Możesz je zmienić
-            <strong> tylko raz</strong> — po zapisie pole zostanie trwale zablokowane.
+            {T.name_lock_modal_body}
           </div>
 
           {/* Zmiana */}
@@ -53,7 +52,7 @@ function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
             padding: "12px 14px", marginBottom: 16, fontSize: 13,
           }}>
             <div style={{ color: C.greyMid, marginBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: .5 }}>
-              ZMIANA
+              {T.name_lock_modal_label}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{
@@ -73,8 +72,7 @@ function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
             background: "#fffbea", border: "1px solid #f5d78e",
             borderRadius: 8, padding: "10px 12px", marginBottom: 20,
           }}>
-            🔒 Dane zostaną zablokowane po zapisaniu. Jeśli potrzebujesz ponownej zmiany,
-            skontaktuj się z administratorem.
+            {T.name_lock_modal_footer}
           </div>
         </div>
 
@@ -87,7 +85,7 @@ function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
               borderRight: `1px solid ${C.grey}`, fontSize: 14, fontWeight: 600,
               color: C.greyDk, cursor: "pointer",
             }}>
-            Anuluj
+            {T.name_lock_cancel}
           </button>
           <button
             onClick={onConfirm}
@@ -95,7 +93,7 @@ function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel }) {
               flex: 1, padding: 16, background: "#e67e22", border: "none",
               fontSize: 14, fontWeight: 700, color: C.white, cursor: "pointer",
             }}>
-            Tak, zmień i zablokuj
+            {T.name_lock_confirm}
           </button>
         </div>
       </div>
@@ -213,7 +211,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
                   color:"#7a4a00", background:"#fffbea", border:"1px solid #f5d78e",
                   borderRadius:4, padding:"2px 7px",
                 }}>
-                  🔒 ZABLOKOWANE
+                  {T.name_lock_badge}
                 </span>
               )}
             </label>
@@ -234,11 +232,11 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
             />
             {user.name_locked ? (
               <div style={{fontSize:11,color:"#7a4a00",marginTop:5,lineHeight:1.4}}>
-                Imię i nazwisko zostało już zmienione. Skontaktuj się z administratorem jeśli potrzebujesz korekty.
+                {T.name_lock_frozen_hint}
               </div>
             ) : (
               <div style={{fontSize:11,color:C.greyMid,marginTop:5,lineHeight:1.4}}>
-                Imię i nazwisko jest drukowane na certyfikatach. Możesz je zmienić <strong>tylko raz</strong>.
+                {T.name_lock_hint}
               </div>
             )}
           </div>
@@ -356,6 +354,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
         newName={editName.trim()}
         onConfirm={() => doSaveProfile(true)}
         onCancel={() => setPendingNameSave(false)}
+        T={T}
       />
     )}
 

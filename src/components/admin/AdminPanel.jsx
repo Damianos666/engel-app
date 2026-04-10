@@ -11,7 +11,7 @@ import { Spinner } from "../SharedUI";
 const AdminMessages      = lazy(() => import("./AdminMessages").then(m => ({ default: m.AdminMessages })));
 const AdminTrainings     = lazy(() => import("./AdminTrainings").then(m => ({ default: m.AdminTrainings })));
 const AdminSchedule      = lazy(() => import("./AdminSchedule").then(m => ({ default: m.AdminSchedule })));
-const AdminBatchComplete = lazy(() => import("./AdminBatchComplete").then(m => ({ default: m.AdminBatchComplete })));
+const AdminUsers = lazy(() => import("./AdminUsers").then(m => ({ default: m.AdminUsers })));
 const AdminInterested    = lazy(() => import("./AdminInterested").then(m => ({ default: m.AdminInterested })));
 const AdminRegistrations = lazy(() => import("./AdminRegistrations").then(m => ({ default: m.AdminRegistrations })));
 // ScheduleTab (chunk client-tabs) — lazy żeby admin chunk nie wciągał kodu klienta
@@ -25,7 +25,7 @@ const ADMIN_TABS = [
   ["Widok klienta", "👁"],
   ["Wiadomości",     "✉"],
   ["Edytor szkoleń", "📋"],
-  ["Zaliczenia",     "🎓"],
+  ["Użytkownicy",   "👥"],
   ["Zgłoszenia",     "🙋"],
   ["Rejestracje",    "📩"],
 ];
@@ -34,7 +34,7 @@ const ADMIN_TABS = [
 const MOBILE_TABS = [
   ["Terminarz",  "📅", 0],  // [label, icon, desktopIndex]
   ["Wiadomości", "✉",  2],  // długie przytrzymanie → Edytor szkoleń
-  ["Zaliczenia", "🎓", 4],
+  ["Użytkownicy", "👥", 4],
   ["Zgłoszenia", "🙋", 5],
   ["Rejestracje","📩", 6],
 ];
@@ -257,6 +257,7 @@ export function AdminPanel({ user, onLogout }) {
         fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
         background: C.greyBg,
         overflow: "hidden",
+        position: "relative",
       }}
     >
       {/* ── Nagłówek ──────────────────────────────────────────────────── */}
@@ -469,7 +470,7 @@ export function AdminPanel({ user, onLogout }) {
               {visited[3] && <Suspense fallback={<Spinner/>}><AdminTrainings token={token}/></Suspense>}
             </div>
             <div style={tab === 4 ? tabVisible : tabHidden}>
-              {visited[4] && <Suspense fallback={<Spinner/>}><AdminBatchComplete token={token}/></Suspense>}
+              {visited[4] && <Suspense fallback={<Spinner/>}><AdminUsers token={token}/></Suspense>}
             </div>
             <div style={tab === 5 ? tabVisible : tabHidden}>
               {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
@@ -495,7 +496,7 @@ export function AdminPanel({ user, onLogout }) {
             )}
           </div>
           <div style={tab === 4 ? tabVisible : tabHidden}>
-            {visited[4] && <Suspense fallback={<Spinner/>}><AdminBatchComplete token={token}/></Suspense>}
+            {visited[4] && <Suspense fallback={<Spinner/>}><AdminUsers token={token}/></Suspense>}
           </div>
           <div style={tab === 5 ? tabVisible : tabHidden}>
             {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
@@ -505,6 +506,9 @@ export function AdminPanel({ user, onLogout }) {
           </div>
         </div>
       )}
+
+      {/* Portal dla toastów — wewnątrz app-container, nie w viewport */}
+      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
