@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback } from "react";
-import { createPortal } from "react-dom"; // portal do document.body
+import { createPortal } from "react-dom";
 
 const ToastContext = createContext(null);
 
@@ -13,11 +13,15 @@ const TYPE_STYLES = {
 function ToastContainer({ toasts }) {
   if (!toasts.length) return null;
 
+  // Renderuj w #toast-portal (wewnątrz .app-container) jeśli istnieje,
+  // w przeciwnym razie fallback do body (np. strony /rejestracja, /regulamin).
+  const portal = document.getElementById("toast-portal");
+
   const content = (
     <div style={{
-      position: "fixed",
-      bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
-      left: 12, right: 12,
+      position: "absolute",
+      bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
+      left: 8, right: 8,
       zIndex: 99999,
       display: "flex", flexDirection: "column", gap: 8,
       pointerEvents: "none",
@@ -43,7 +47,7 @@ function ToastContainer({ toasts }) {
     </div>
   );
 
-  return createPortal(content, document.body);
+  return portal ? createPortal(content, portal) : createPortal(content, document.body);
 }
 
 export function ToastProvider({ children }) {

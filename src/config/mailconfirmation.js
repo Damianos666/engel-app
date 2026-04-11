@@ -42,6 +42,28 @@ Potwierdzamy rejestrację następujących osób:
 Lista zgłoszonych uczestników:
 {participantsList}
 
+
+Ponizej przesyłam wskazówki organizacyjne na temat szkolenia:
+
+Godziny szkolenia: codziennie 8:30 – 16:00
+Miejsce szkolenia: ENGEL POLSKA Sp. z o.o. ul. Ostródzka 50B, Warszawa (03-289)
+Mapa:  https://goo.gl/maps/f4KQtmbnfY82
+ 
+Hotele w najbliższej okolicy: 
+https://warszawa-polnoc.campanile.com/pl/?sr=SEO_BING      Na hasło ENGEL 5% ZNIŻKI
+http://www.partnerhotel.pl/
+https://hotelmistral.pl/
+http://stalowa52.pl/ 
+ 
+Komunikacja miejska:
+https://jakdojade.pl/warszawa/trasa/
+Przystanek: OSTRÓDZKA
+----------------
+Rezygnacja
+Anulowanie zgłoszenia w terminie do 2 tygodni przed rozpoczęciem kursu jest bezpłatne. Zrezygnowanie na tydzień przed rozpoczęciem kursu spowoduje obciążenie Klienta 50% kosztami szkolenia. Zamiana uczestników kursu jest zawsze możliwa. Zastrzegamy sobie prawo do przesunięcia, odwołania lub wyznaczenia nowego terminu dla określonego kursu. Informacje na ten temat zostaną przekazane Klientom z odpowiednim wyprzedzeniem.
+----------------
+
+
 W razie pytań dotyczących szkolenia, warunków uczestnictwa lub konieczności wprowadzenia zmian prosimy o kontakt:
 
   {engelPerson}

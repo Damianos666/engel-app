@@ -646,6 +646,8 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
         )}
       </div>
       <TrainerTabBar tab={tab} setTab={setTab} msgCount={msgCount}/>
+      {/* Portal dla toastów — renderuje się wewnątrz app-container, nie w viewport */}
+      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
@@ -746,6 +748,8 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
         </Suspense>
       )}
 
+      {/* Portal dla toastów — renderuje się wewnątrz app-container, nie w viewport */}
+      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
