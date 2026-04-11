@@ -138,24 +138,19 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
     }
   }
 
-  // Grupuj po scheduled_training_id, sortuj grupy wg daty rosnąco, te z katalogu na koniec
+  // Grupuj po scheduled_training_id, sortuj grupy wg daty rosnąco
   const groups = useMemo(() => {
     const map = new Map();
     interests.forEach(item => {
-      const sid = item.scheduled_training_id || `CATALOG-${item.training_id}`;
+      const sid = item.scheduled_training_id;
       if (!map.has(sid)) {
-        map.set(sid, { scheduled: item.scheduled, isCatalog: !item.scheduled_training_id, trainingId: item.training_id, items: [] });
+        map.set(sid, { scheduled: item.scheduled, items: [] });
       }
       map.get(sid).items.push(item);
     });
     return Array.from(map.values()).sort((a, b) => {
       const da = a.scheduled?.date || "";
       const db2 = b.scheduled?.date || "";
-      if (a.isCatalog && !b.isCatalog) return 1;
-      if (!a.isCatalog && b.isCatalog) return -1;
-      if (a.isCatalog && b.isCatalog) {
-          return (a.trainingId || "").localeCompare(b.trainingId || "");
-      }
       return da.localeCompare(db2);
     });
   }, [interests]);
@@ -220,22 +215,20 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
         <div style={{padding:"10px 12px 24px", display:"flex", flexDirection:"column", gap:16}}>
           {groups.map(group => {
             const sched = group.scheduled;
-            const trainingId = group.isCatalog ? group.trainingId : sched?.training_id;
+            const trainingId = sched?.training_id;
             const t = trainingId && trainingId !== "ST"
               ? TRAININGS.find(x => x.id === trainingId)
               : null;
             const grp   = t ? GROUPS.find(g => g.id === t.group) : null;
             const isST  = trainingId === "ST";
-            const barColor = group.isCatalog ? "#2980B9" : isST ? "#8E44AD" : (grp?.color || C.green);
+            const barColor = isST ? "#8E44AD" : (grp?.color || C.green);
             const trainingTitle = isST
               ? (sched?.custom_name || "Szkolenie specjalne")
               : (t?.title || trainingId || "—");
 
             const dateStr = sched?.date || "";
             const dateObj = dateStr ? new Date(dateStr + "T00:00:00") : null;
-            const dateLabel = group.isCatalog
-              ? "Katalog (Brak terminu)"
-              : dateObj
+            const dateLabel = dateObj
               ? dateObj.toLocaleDateString("pl-PL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
               : "—";
 
@@ -246,10 +239,9 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
 
             const groupContacted  = group.items.filter(i => i.contacted).length;
             const groupTotal      = group.items.length;
-            const groupKey = group.isCatalog ? `CATALOG-${group.trainingId}` : sched?.id || dateStr;
 
             return (
-              <div key={groupKey} style={{
+              <div key={sched?.id || dateStr} style={{
                 background:C.white,
                 borderRadius:8,
                 boxShadow:"0 1px 3px rgba(0,0,0,.07)",
@@ -257,20 +249,20 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
               }}>
                   {/* nagłówek szkolenia — klikalny, otwiera edycję notatek */}
                 <div
-                  onClick={() => !group.isCatalog && (editingNotes === sched?.id ? setEditingNotes(null) : openNotesEdit(sched))}
+                  onClick={() => editingNotes === sched?.id ? setEditingNotes(null) : openNotesEdit(sched)}
                   style={{
                     borderLeft:`4px solid ${barColor}`,
                     padding:"12px 14px",
-                    background: (editingNotes === sched?.id && !group.isCatalog) ? "#F8FFF0" : C.white,
+                    background: editingNotes === sched?.id ? "#F8FFF0" : C.white,
                     borderBottom:`1px solid ${C.grey}`,
-                    cursor: group.isCatalog ? "default" : "pointer",
+                    cursor:"pointer",
                     userSelect:"none",
                   }}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:11,fontWeight:700,color:barColor,marginBottom:3,textTransform:"capitalize"}}>
                         {dateLabel}
-                        {endDateStr && endDateStr !== dateStr && !group.isCatalog && (
+                        {endDateStr && endDateStr !== dateStr && (
                           <span style={{fontWeight:400,color:C.greyMid}}> – {endDateStr}</span>
                         )}
                       </div>
@@ -289,26 +281,24 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
                             : <>{groupTotal} {groupTotal === 1 ? "osoba" : "osoby"} · <span style={{color:C.greenDk,fontWeight:700}}>{groupContacted} skontaktowanych</span></>
                           }
                         </span>
-                        {sched?.participants_count != null && !group.isCatalog && (
+                        {sched?.participants_count != null && (
                           <span style={{fontSize:11,color:C.greyMid}}>· 👥 {sched.participants_count}</span>
                         )}
-                        {sched?.notes && !group.isCatalog && (
+                        {sched?.notes && (
                           <span style={{fontSize:10,color:C.greyMid,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>
                             📝 {sched.notes}
                           </span>
                         )}
                       </div>
                     </div>
-                    {!group.isCatalog && (
-                      <span style={{fontSize:12,color:C.greyMid,marginLeft:8,flexShrink:0}}>
-                        {editingNotes === sched?.id ? "▲" : "✏️"}
-                      </span>
-                    )}
+                    <span style={{fontSize:12,color:C.greyMid,marginLeft:8,flexShrink:0}}>
+                      {editingNotes === sched?.id ? "▲" : "✏️"}
+                    </span>
                   </div>
                 </div>
 
                 {/* inline edytor notatek i liczby uczestników */}
-                {editingNotes === sched?.id && !group.isCatalog && (
+                {editingNotes === sched?.id && (
                   <div onClick={e => e.stopPropagation()} style={{
                     padding:"14px",
                     background:"#F8FFF0",
