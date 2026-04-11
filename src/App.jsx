@@ -111,7 +111,7 @@ const styles = {
   trainerBadge:   { fontSize: 11, fontWeight: 700, color: C.green, flexShrink: 0, background: C.greenBg, padding: "2px 8px", borderRadius: 4 },
   progressText:   { fontSize: 13, fontWeight: 700, color: C.green, flexShrink: 0 },
   appContent:     { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
-  tabVisible:     { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" },
+  tabVisible:     { display: "flex", flexDirection: "column", height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(60px + var(--safe-bottom, 0px))" },
   tabHidden:      { display: "none",  flexDirection: "column", height: "100%", overflow: "hidden" },
   trainerContent: { flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column", paddingBottom: "calc(60px + var(--safe-bottom, 0px))" },
   tabBar:         { display: "flex", background: C.white, borderTop: `1px solid ${C.grey}`, flexShrink: 0 },
