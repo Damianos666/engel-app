@@ -289,9 +289,14 @@
         document.documentElement.style.setProperty('--app-width',  w + 'px');
         document.documentElement.style.setProperty('--app-height', h + 'px');
 
-        // UWAGA: NIE robimy tu root.style.display='none' — to anuluje gesty
-        // scroll na iOS PWA (visualViewport.resize odpala się podczas swipe'a).
-        // CSS variables są reaktywne — zmiana --app-height wywołuje repaint automatycznie.
+        // Wymuszamy synchroniczny reflow na iOS Safari — bez tego zmiana CSS variable
+        // --app-height może nie przebudować layoutu przed kolejnym frame'em.
+        var root = document.getElementById('root');
+        if (root) {
+          root.style.display = 'none';
+          void root.offsetHeight;
+          root.style.display = '';
+        }
       }
 
       setAppSize();
@@ -302,9 +307,13 @@
 
       window._eaSetAppSize = setAppSize;
 
-      // NIE podpinamy visualViewport.resize — odpala się podczas scroll na iOS PWA
-      // i przerywałby gesty. Orientacja obsługiwana przez dedykowane eventy poniżej.
-      // window.visualViewport.addEventListener('resize', setAppSize);  // <-- USUNIĘTE
+      // visualViewport.resize odpala się przy pojawieniu/znikaniu klawiatury (NIE podczas swipe'a
+      // w trybie standalone PWA — tam viewport nie zmienia się podczas scrollowania).
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setAppSize);
+      } else {
+        window.addEventListener('resize', setAppSize);
+      }
 
       if (window.screen && window.screen.orientation) {
         window.screen.orientation.addEventListener('change', function() {
