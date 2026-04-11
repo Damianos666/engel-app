@@ -257,7 +257,6 @@ export function AdminPanel({ user, onLogout }) {
         fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
         background: C.greyBg,
         overflow: "hidden",
-        position: "relative",
       }}
     >
       {/* ── Nagłówek ──────────────────────────────────────────────────── */}
@@ -506,9 +505,6 @@ export function AdminPanel({ user, onLogout }) {
           </div>
         </div>
       )}
-
-      {/* Portal dla toastów — wewnątrz app-container, nie w viewport */}
-      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
