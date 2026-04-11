@@ -105,7 +105,7 @@ const styles = {
   loadingInner:   { textAlign: "center" },
   spinner:        { width: 40, height: 40, border: `3px solid ${C.grey}`, borderTopColor: C.green, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" },
   loadingText:    { color: C.greyDk, fontSize: 14 },
-  appContainer:   { height: "100%", display: "flex", flexDirection: "column", fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", background: C.greyBg, overflow: "hidden" },
+  appContainer:   { height: "100%", display: "flex", flexDirection: "column", fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", background: C.greyBg, overflow: "hidden", position: "relative" },
   banner:         { background: C.greyBanner, borderBottom: "1px solid #D0D3D6", padding: "9px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" },
   bannerName:     { fontSize: 13, color: C.greyDk, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 },
   trainerBadge:   { fontSize: 11, fontWeight: 700, color: C.green, flexShrink: 0, background: C.greenBg, padding: "2px 8px", borderRadius: 4 },
@@ -646,8 +646,6 @@ function TrainerView({ tab, setTab, msgCount, completed, activeGroups, setActive
         )}
       </div>
       <TrainerTabBar tab={tab} setTab={setTab} msgCount={msgCount}/>
-      {/* Portal dla toastów — renderuje się wewnątrz app-container, nie w viewport */}
-      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
@@ -748,8 +746,6 @@ function ClientView({ tab, setTab, completed, activeGroups, setActiveGroups, onL
         </Suspense>
       )}
 
-      {/* Portal dla toastów — renderuje się wewnątrz app-container, nie w viewport */}
-      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }

@@ -43,8 +43,8 @@ const STORAGE_KEY_MSG_VIEW      = "eea_admin_msg_view";      // "messages" | "ed
 const STORAGE_KEY_ZR_ORDER      = "eea_admin_zr_order";      // "zg_first" | "reg_first"
 
 
-const tabVisible = { display:"flex", flexDirection:"column", flex:1, minHeight:0, overflowY:"auto", WebkitOverflowScrolling:"touch", touchAction:"pan-y" };
-const tabHidden  = { display:"none" };
+const tabVisible = { display:"flex", flexDirection:"column", flex:1, minHeight:0, overflowY:"auto", WebkitOverflowScrolling:"touch" };
+const tabHidden  = { display:"none", flexDirection:"column", flex:1, minHeight:0 };
 
 /* ─── Hook: czy jesteśmy na desktopie (>= 1025px) ─────────────────────── */
 function useIsDesktop() {
@@ -474,7 +474,7 @@ export function AdminPanel({ user, onLogout }) {
         </div>
       ) : (
         /* MOBILE: 4 zakładki */
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", touchAction: "pan-y" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={tab === 0 ? tabVisible : tabHidden}>
             {visited[0] && (scheduleView === "client"
               ? <Suspense fallback={<Spinner/>}><ScheduleTab activeGroups={ALL_GROUPS}/></Suspense>
@@ -499,8 +499,6 @@ export function AdminPanel({ user, onLogout }) {
         </div>
       )}
 
-      {/* Portal dla toastów — wewnątrz app-container, nie w viewport */}
-      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }
