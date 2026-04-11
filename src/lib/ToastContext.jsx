@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 const ToastContext = createContext(null);
 
@@ -11,19 +12,29 @@ const TYPE_STYLES = {
 
 function ToastContainer({ toasts }) {
   if (!toasts.length) return null;
-  return (
+
+  // Renderuj w #toast-portal (wewnątrz .app-container) jeśli istnieje,
+  // w przeciwnym razie fallback do body (np. strony /rejestracja, /regulamin).
+  const portal = document.getElementById("toast-portal");
+
+  const content = (
     <div style={{
-      position: "fixed", bottom: "calc(80px + env(safe-area-inset-bottom,0px))",
-      left: 12, right: 12, zIndex: 99999,
-      display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none",
+      position: "absolute",
+      bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
+      left: 8, right: 8,
+      zIndex: 99999,
+      display: "flex", flexDirection: "column", gap: 8,
+      pointerEvents: "none",
       fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
     }}>
       {toasts.map(t => {
         const s = TYPE_STYLES[t.type] || TYPE_STYLES.error;
         return (
           <div key={t.id} style={{
-            background: s.bg, border: `1px solid ${s.border}`, borderLeft: `4px solid ${s.border}`,
-            padding: "11px 14px", borderRadius: 6, display: "flex", gap: 10, alignItems: "flex-start",
+            background: s.bg, border: `1px solid ${s.border}`,
+            borderLeft: `4px solid ${s.border}`,
+            padding: "11px 14px", borderRadius: 6,
+            display: "flex", gap: 10, alignItems: "flex-start",
             boxShadow: "0 2px 12px rgba(0,0,0,.15)", pointerEvents: "auto",
             animation: "toastIn .25s ease",
           }}>
@@ -35,6 +46,8 @@ function ToastContainer({ toasts }) {
       <style>{`@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
   );
+
+  return portal ? createPortal(content, portal) : createPortal(content, document.body);
 }
 
 export function ToastProvider({ children }) {
@@ -56,7 +69,6 @@ export function ToastProvider({ children }) {
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  // Fallback: jeśli ktoś użyje poza providerem
   if (!ctx) return { addToast: (msg) => alert(msg) };
   return ctx;
 }

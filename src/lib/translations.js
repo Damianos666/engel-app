@@ -68,6 +68,17 @@ export const translations = {
     points_ranking:      "Punkty · Ranking · Certyfikat",
     view_active:         "Widok aktywny",
     trainer_view_active: "Widok trenera aktywny",
+    name_lock_badge:          "🔒 ZABLOKOWANE",
+    name_lock_hint:           "Imię i nazwisko jest drukowane na certyfikatach. Możesz je zmienić tylko raz.",
+    name_lock_frozen_hint:    "Imię i nazwisko zostało już zmienione. Skontaktuj się z administratorem jeśli potrzebujesz korekty.",
+    name_lock_modal_title:    "Zmiana imienia i nazwiska",
+    name_lock_modal_subtitle: "Ta operacja jest jednorazowa i nieodwracalna",
+    name_lock_modal_body:     "Imię i nazwisko jest drukowane na certyfikatach. Możesz je zmienić tylko raz — po zapisie pole zostanie trwale zablokowane.",
+    name_lock_modal_label:    "ZMIANA",
+    name_lock_modal_footer:   "🔒 Dane zostaną zablokowane po zapisaniu. Jeśli potrzebujesz ponownej zmiany, skontaktuj się z administratorem.",
+    name_lock_cancel:         "Anuluj",
+    name_lock_confirm:        "Tak, zmień i zablokuj",
+
 
     // MessagesTab
     no_messages:        "Brak wiadomości",
@@ -238,6 +249,17 @@ export const translations = {
     points_ranking:      "Points · Ranking · Certificate",
     view_active:         "Active view",
     trainer_view_active: "Trainer view active",
+    name_lock_badge:          "🔒 LOCKED",
+    name_lock_hint:           "Your name appears on certificates. You can change it only once.",
+    name_lock_frozen_hint:    "Name has already been changed. Contact administrator if you need a correction.",
+    name_lock_modal_title:    "Change name",
+    name_lock_modal_subtitle: "This action is one-time and irreversible",
+    name_lock_modal_body:     "Your name is printed on certificates. You can change it only once — after saving, the field will be permanently locked.",
+    name_lock_modal_label:    "CHANGE",
+    name_lock_modal_footer:   "🔒 Data will be locked after saving. If you need to change it again, contact the administrator.",
+    name_lock_cancel:         "Cancel",
+    name_lock_confirm:        "Yes, change and lock",
+
 
     // MessagesTab
     no_messages:        "No messages",

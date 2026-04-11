@@ -290,7 +290,7 @@ export function ScheduleTab({ activeGroups, refreshKey }) {
   const todayStr = today();
 
   return (
-    <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",background:C.greyBg,display:"flex",flexDirection:"column",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
+    <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y",background:C.greyBg,display:"flex",flexDirection:"column",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
 
       <div style={{background:C.white,margin:"12px 12px 0",borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,.07)",padding:"12px 10px"}}
         onTouchStart={handleTouchStart}

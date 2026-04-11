@@ -25,6 +25,10 @@ export const authHeaders = (token) => ({
 //   Dzięki temu użytkownik bez "zapamiętaj" NIE jest wylogowywany po 1h
 //   (access_token wygasa, ale RAM-owy refreshToken pozwala go odświeżyć).
 const SESSION_KEY = "eea_session";
+// OPTYMALIZACJA: rola zapisywana osobno — main.jsx czyta ją PRZED zamontowaniem
+// React i startuje preload właściwych chunków równolegle z session restore.
+// Wartości: "admin" | "trainer" | "client"
+const ROLE_KEY = "eea_role";
 let _memoryToken        = null;
 let _memoryRefreshToken = null;
 let _memoryUser         = null;
@@ -40,6 +44,19 @@ export const session = {
       } catch {}
     }
   },
+  // Wywoływane po handleLogin gdy znamy już profil użytkownika.
+  // Zapisuje rolę tylko gdy sesja jest persisted (zapamiętaj mnie),
+  // bo tylko wtedy preload przy kolejnym uruchomieniu ma sens.
+  saveRole: (role, trainerId) => {
+    try {
+      if (!localStorage.getItem(SESSION_KEY)) return; // sesja nie jest persisted — nie zapisuj
+      const r = role === "admin" ? "admin" : trainerId ? "trainer" : "client";
+      localStorage.setItem(ROLE_KEY, r);
+    } catch {}
+  },
+  loadRole: () => {
+    try { return localStorage.getItem(ROLE_KEY); } catch { return null; }
+  },
   load: () => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
@@ -54,6 +71,9 @@ export const session = {
     _memoryRefreshToken = null;
     _memoryUser         = null;
     try { localStorage.removeItem(SESSION_KEY); } catch {}
+    try { localStorage.removeItem(ROLE_KEY); }   catch {}
+    // Wyczyść cache zapytań — po wylogowaniu inny użytkownik może mieć inne dane
+    _queryCache.clear();
   },
   getToken: () => _memoryToken,
   setToken: (t) => { _memoryToken = t; },
@@ -203,16 +223,68 @@ const fetchWithRefresh = async (url, options, token) => {
   });
 };
 
+/* ─── IN-MEMORY QUERY CACHE ──────────────────────────────────────────────── */
+// Lekka warstwa cache dla danych które:
+//   1. Zmieniają się rzadko (quizzy, pytania — tylko admin je edytuje)
+//   2. Są fetche'owane przez wiele komponentów przy każdym otwarciu zakładki
+//
+// TTL = 5 minut. Klucz = `${table}::${query}`. Token NIE wchodzi do klucza
+// bo dane quizów są wspólne dla wszystkich użytkowników (admin piszący pytanie
+// widzi to samo co klient — nie ma danych per-user w quizzes/quiz_questions).
+//
+// Tabele objęte cache (dane rzadko zmienne, bez PII):
+//   • quizzes           — lista quizów, zmienia się gdy admin doda quiz
+//   • quiz_questions    — pytania, zmienia się gdy admin doda pytanie
+//   • training_overrides — nadpisania treningów, rzadko zmieniane
+//
+// Tabele WYŁĄCZONE z cache (dane per-user lub często zmienne):
+//   • tip_confirmations, quiz_weekly_results, user_gamification — per-user
+//   • messages, training_interests — często zmienne, Realtime je odświeża
+//   • completions, profiles, scheduled_trainings — muszą być świeże
+//
+// Cache jest czyszczony przy wylogowaniu (session.clear).
+
+const CACHEABLE_TABLES = new Set(["quizzes", "quiz_questions", "training_overrides"]);
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minut
+const _queryCache  = new Map(); // key → { data, expiresAt }
+
+export const queryCache = {
+  get: (table, query) => {
+    if (!CACHEABLE_TABLES.has(table)) return null;
+    const key   = `${table}::${query}`;
+    const entry = _queryCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) { _queryCache.delete(key); return null; }
+    return entry.data;
+  },
+  set: (table, query, data) => {
+    if (!CACHEABLE_TABLES.has(table)) return;
+    _queryCache.set(`${table}::${query}`, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+  },
+  invalidate: (table) => {
+    for (const key of _queryCache.keys()) {
+      if (key.startsWith(`${table}::`)) _queryCache.delete(key);
+    }
+  },
+  clear: () => _queryCache.clear(),
+};
+
 /* ─── DB ─────────────────────────────────────────────────────────────────── */
 export const db = {
   get: async (token, table, query = "", { signal } = {}) => {
+    // Sprawdź cache przed siecią dla tabel z listy CACHEABLE_TABLES
+    const cached = queryCache.get(table, query);
+    if (cached) return cached;
+
     const r = await fetchWithRefresh(
       `${SB_URL}/rest/v1/${table}?${query}`,
       { headers: authHeaders(token), signal },
       token
     );
     if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    const data = await r.json();
+    queryCache.set(table, query, data);
+    return data;
   },
 
   insert: async (token, table, data, { signal } = {}) => {

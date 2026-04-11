@@ -1,13 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { C, GROUPS } from "../../lib/constants";
 import { db, realtime } from "../../lib/supabase";
-import { AdminMessages } from "./AdminMessages";
-import { AdminTrainings } from "./AdminTrainings";
-import { AdminSchedule } from "./AdminSchedule";
-import { AdminBatchComplete } from "./AdminBatchComplete";
-import { AdminInterested } from "./AdminInterested";
-import { ScheduleTab } from "../ScheduleTab";
+import { Spinner } from "../SharedUI";
 
+// ─── LAZY ADMIN SUB-PANELE ────────────────────────────────────────────────
+// Admin zawsze ląduje w zakładce 0 (Terminarz). Pozostałe 5 paneli ładuje
+// się dopiero przy pierwszym kliknięciu zakładki — nie przy logowaniu.
+// Łączny rozmiar paneli admina to ~800KB — lazy loading skraca czas do
+// interakcji przy pierwszym otwarciu panelu nawet o kilka sekund.
+const AdminMessages      = lazy(() => import("./AdminMessages").then(m => ({ default: m.AdminMessages })));
+const AdminTrainings     = lazy(() => import("./AdminTrainings").then(m => ({ default: m.AdminTrainings })));
+const AdminSchedule      = lazy(() => import("./AdminSchedule").then(m => ({ default: m.AdminSchedule })));
+const AdminUsers = lazy(() => import("./AdminUsers").then(m => ({ default: m.AdminUsers })));
+const AdminInterested    = lazy(() => import("./AdminInterested").then(m => ({ default: m.AdminInterested })));
+const AdminRegistrations = lazy(() => import("./AdminRegistrations").then(m => ({ default: m.AdminRegistrations })));
+// ScheduleTab (chunk client-tabs) — lazy żeby admin chunk nie wciągał kodu klienta
+const ScheduleTab        = lazy(() => import("../ScheduleTab").then(m => ({ default: m.ScheduleTab })));
 const LOGO_URL = "/logo.png";
 const ALL_GROUPS = GROUPS.map(g => g.id);
 
@@ -17,23 +25,25 @@ const ADMIN_TABS = [
   ["Widok klienta", "👁"],
   ["Wiadomości",     "✉"],
   ["Edytor szkoleń", "📋"],
-  ["Zaliczenia",     "🎓"],
+  ["Użytkownicy",   "👥"],
   ["Zgłoszenia",     "🙋"],
+  ["Rejestracje",    "📩"],
 ];
 
 // Mobile: bez "Terminarz w.k." — zastąpiona długim przytrzymaniem
 const MOBILE_TABS = [
   ["Terminarz",  "📅", 0],  // [label, icon, desktopIndex]
   ["Wiadomości", "✉",  2],  // długie przytrzymanie → Edytor szkoleń
-  ["Zaliczenia", "🎓", 4],
-  ["Zgłoszenia", "🙋", 5],
+  ["Użytkownicy", "👥", 4],
+  ["Zgłoszenia", "🙋", 5],  // długie przytrzymanie ↔ Rejestracje (tylko jedna widoczna)
 ];
 
 const STORAGE_KEY_SCHEDULE_VIEW = "eea_admin_schedule_view"; // "admin" | "client"
 const STORAGE_KEY_MSG_VIEW      = "eea_admin_msg_view";      // "messages" | "editor"
+const STORAGE_KEY_ZR_ORDER      = "eea_admin_zr_order";      // "zg_first" | "reg_first"
 
 
-const tabVisible = { display:"flex", flexDirection:"column", height:"100%", overflowY:"auto", WebkitOverflowScrolling:"touch" };
+const tabVisible = { display:"flex", flexDirection:"column", flex:1, minHeight:0, overflowY:"auto", WebkitOverflowScrolling:"touch", touchAction:"pan-y" };
 const tabHidden  = { display:"none" };
 
 /* ─── Hook: czy jesteśmy na desktopie (>= 1025px) ─────────────────────── */
@@ -51,16 +61,23 @@ function useIsDesktop() {
 export function AdminPanel({ user, onLogout }) {
   const [tab,                setTabRaw]            = useState(0);
   const [interestedCount,    setInterestedCount]   = useState(0);
-  const [scheduleRefreshKey,   setScheduleRefreshKey]   = useState(0);
-  const [interestedRefreshKey, setInterestedRefreshKey] = useState(0);
+  const [registrationsCount, setRegistrationsCount] = useState(0);
+  const [scheduleRefreshKey,     setScheduleRefreshKey]     = useState(0);
+  const [interestedRefreshKey,   setInterestedRefreshKey]   = useState(0);
+  const [registrationsRefreshKey,setRegistrationsRefreshKey] = useState(0);
   const prevTabRef = useRef(null);
+
+  // mount-on-first-visit — każdy panel admina ładuje chunk przy pierwszym kliknięciu
+  const [visited, setVisited] = useState({ 0: true });
 
   function setTab(newTab) {
     const prev = prevTabRef.current;
     if (newTab === 0 && prev !== 0) setScheduleRefreshKey(k => k + 1);
     if (newTab === 5 && prev !== 5) setInterestedRefreshKey(k => k + 1);
+    if (newTab === 6 && prev !== 6) setRegistrationsRefreshKey(k => k + 1);
     prevTabRef.current = newTab;
     setTabRaw(newTab);
+    if (!visited[newTab]) setVisited(p => ({ ...p, [newTab]: true }));
   }
   // scheduleView: "admin" | "client" — persystowane w localStorage
   const [scheduleView, setScheduleView] = useState(() => {
@@ -72,6 +89,19 @@ export function AdminPanel({ user, onLogout }) {
     try { return localStorage.getItem(STORAGE_KEY_MSG_VIEW) || "messages"; }
     catch { return "messages"; }
   });
+  // zrOrder: kolejność Zgłoszenia/Rejestracje — "zg_first" | "reg_first"
+  const [zrOrder, setZrOrder] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY_ZR_ORDER) || "zg_first"; }
+    catch { return "zg_first"; }
+  });
+
+  function toggleZrOrder() {
+    setZrOrder(prev => {
+      const next = prev === "zg_first" ? "reg_first" : "zg_first";
+      try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, next); } catch {}
+      return next;
+    });
+  }
   const isDesktop = useIsDesktop();
   const realtimeUnsub   = useRef(null);
   const lastInterestAt  = useRef(null);
@@ -136,6 +166,14 @@ export function AdminPanel({ user, onLogout }) {
       const newestAt = data[0].created_at;
       if (lastInterestAt.current && newestAt > lastInterestAt.current) {
         const newOnes = data.filter(i => i.created_at > lastInterestAt.current);
+        // Nowe zgłoszenie → przsuń Zgłoszenia na pierwsze miejsce
+        setZrOrder(prev => {
+          if (prev !== "zg_first") {
+            try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, "zg_first"); } catch {}
+            return "zg_first";
+          }
+          return prev;
+        });
         if ("Notification" in window && Notification.permission === "granted") {
           newOnes.forEach(item => {
             new Notification("🙋 ENGEL Expert Academy", {
@@ -162,6 +200,52 @@ export function AdminPanel({ user, onLogout }) {
     };
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Badge dla nowych rejestracji z formularza /rejestracja
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const lastRegAt = useRef(null);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const checkRegistrations = useCallback(async (tok) => {
+    try {
+      const data = await db.get(tok, "training_registrations",
+        "select=id,created_at,company_name,contact_name,is_handled&order=created_at.desc&limit=50"
+      );
+      if (!Array.isArray(data)) return;
+      const pending = data.filter(r => !r.is_handled);
+      setRegistrationsCount(pending.length);
+      if (!data.length) return;
+      const newestAt = data[0].created_at;
+      if (lastRegAt.current && newestAt > lastRegAt.current) {
+        const newOnes = data.filter(r => r.created_at > lastRegAt.current);
+        // Nowa rejestracja → przesuń Rejestracje na pierwsze miejsce
+        setZrOrder(prev => {
+          if (prev !== "reg_first") {
+            try { localStorage.setItem(STORAGE_KEY_ZR_ORDER, "reg_first"); } catch {}
+            return "reg_first";
+          }
+          return prev;
+        });
+        if ("Notification" in window && Notification.permission === "granted") {
+          newOnes.forEach(item => {
+            new Notification("📩 ENGEL Expert Academy", {
+              body: `Nowa rejestracja: ${item.company_name || item.contact_name || "Nowe zgłoszenie"}`,
+              icon: "/pwa-192.png", badge: "/pwa-192.png",
+              tag: `reg-${item.id}`, renotify: true,
+            });
+          });
+        }
+      }
+      lastRegAt.current = newestAt;
+    } catch { /* cicho ignoruj */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    checkRegistrations(token);
+    // Poll co 2 minuty (brak dedykowanego realtime kanału dla tej tabeli)
+    const interval = setInterval(() => checkRegistrations(token), 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div
       className={`app-container${isDesktop ? " admin-desktop" : ""}`}
@@ -172,6 +256,7 @@ export function AdminPanel({ user, onLogout }) {
         fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
         background: C.greyBg,
         overflow: "hidden",
+        position: "relative",
       }}
     >
       {/* ── Nagłówek ──────────────────────────────────────────────────── */}
@@ -241,24 +326,43 @@ export function AdminPanel({ user, onLogout }) {
           const isActive    = tab === desktopIdx;
           const isSchedule  = desktopIdx === 0;
           const isMessages  = desktopIdx === 2;
+          const isZg        = desktopIdx === 5;
+          const isReg       = desktopIdx === 6;
           const isClientView  = isSchedule && scheduleView === "client";
           const isEditorView  = isMessages && msgView === "editor";
-          // długie przytrzymanie aktywne zawsze (nie tylko gdy aktywna zakładka)
+
+          // Dla Zgłoszenia/Rejestracje — jedna zakładka, dynamicznie przełączana
+          // Długie przytrzymanie (toggleZrOrder) zamienia, która jest aktywna.
+          // zrOrder "zg_first" → pokazujemy Zgłoszenia, "reg_first" → Rejestracje.
+          let renderDesktopIdx = desktopIdx;
+          let renderLabel = label;
+          let renderIcon = icon;
+          if (mIdx === 3) {
+            renderDesktopIdx = zrOrder === "zg_first" ? 5 : 6;
+            renderLabel      = zrOrder === "zg_first" ? "Zgłoszenia" : "Rejestracje";
+            renderIcon       = zrOrder === "zg_first" ? "🙋" : "📩";
+          }
+          const isActiveRender  = tab === renderDesktopIdx;
+          const isZgReg = mIdx === 3;
+
+          // długie przytrzymanie
           const lpHandlers = isSchedule
             ? makeLongPressHandlers(toggleScheduleView)
             : isMessages
               ? makeLongPressHandlers(toggleMsgView)
-              : {};
+              : isZgReg
+                ? makeLongPressHandlers(toggleZrOrder)
+                : {};
           return (
             <button
               key={mIdx}
-              onClick={() => setTab(desktopIdx)}
+              onClick={() => setTab(renderDesktopIdx)}
               {...lpHandlers}
               style={{
                 flex: 1,
                 background: "none",
                 border: "none",
-                borderBottom: `3px solid ${isActive ? C.green : "transparent"}`,
+                borderBottom: `3px solid ${isActiveRender ? C.green : "transparent"}`,
                 padding: "10px 4px",
                 display: "flex",
                 flexDirection: "column",
@@ -271,7 +375,7 @@ export function AdminPanel({ user, onLogout }) {
               }}
             >
               {/* badge Zgłoszenia */}
-              {desktopIdx === 5 && interestedCount > 0 && (
+              {renderDesktopIdx === 5 && interestedCount > 0 && (
                 <div style={{
                   position: "absolute", top: 4, right: "calc(50% - 14px)",
                   background: C.red, color: C.white, borderRadius: "50%",
@@ -281,11 +385,22 @@ export function AdminPanel({ user, onLogout }) {
                   {interestedCount}
                 </div>
               )}
-              <span style={{ fontSize: 16, color: isActive ? C.black : C.greyMid }}>
-                {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : icon}
+              {/* badge Rejestracje */}
+              {renderDesktopIdx === 6 && registrationsCount > 0 && (
+                <div style={{
+                  position: "absolute", top: 4, right: "calc(50% - 14px)",
+                  background: "#2980B9", color: C.white, borderRadius: "50%",
+                  width: 15, height: 15, fontSize: 8, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {registrationsCount}
+                </div>
+              )}
+              <span style={{ fontSize: 16, color: isActiveRender ? C.black : C.greyMid }}>
+                {isSchedule && isClientView ? "👁" : isMessages && isEditorView ? "📋" : renderIcon}
               </span>
-              <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
-                {isSchedule && isClientView ? "Widok klienta" : isMessages && isEditorView ? "Edytor" : label}
+              <span style={{ fontSize: 9, fontWeight: 700, color: isActiveRender ? C.black : C.greyMid, letterSpacing: .5, textTransform: "uppercase" }}>
+                {isSchedule && isClientView ? "Widok klienta" : isMessages && isEditorView ? "Edytor" : renderLabel}
               </span>
             </button>
           );
@@ -318,39 +433,74 @@ export function AdminPanel({ user, onLogout }) {
                     {interestedCount}
                   </div>
                 )}
+                {/* badge dla Rejestracje (index 6) */}
+                {i === 6 && registrationsCount > 0 && (
+                  <div style={{
+                    marginLeft: "auto",
+                    background: "#2980B9", color: C.white, borderRadius: "50%",
+                    minWidth: 18, height: 18, fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 3px", flexShrink: 0,
+                  }}>
+                    {registrationsCount}
+                  </div>
+                )}
               </button>
             ))}
           </nav>
           <div className="admin-content-area">
-            <div style={tab === 0 ? tabVisible : tabHidden}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></div>
-            <div style={tab === 1 ? tabVisible : tabHidden}><ScheduleTab activeGroups={ALL_GROUPS}/></div>
-            <div style={tab === 2 ? tabVisible : tabHidden}><AdminMessages token={token}/></div>
-            <div style={tab === 3 ? tabVisible : tabHidden}><AdminTrainings token={token}/></div>
-            <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-            <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
+            <div style={tab === 0 ? tabVisible : tabHidden}>
+              {visited[0] && <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>}
+            </div>
+            <div style={tab === 1 ? tabVisible : tabHidden}>
+              {visited[1] && <Suspense fallback={<Spinner/>}><ScheduleTab activeGroups={ALL_GROUPS}/></Suspense>}
+            </div>
+            <div style={tab === 2 ? tabVisible : tabHidden}>
+              {visited[2] && <Suspense fallback={<Spinner/>}><AdminMessages token={token}/></Suspense>}
+            </div>
+            <div style={tab === 3 ? tabVisible : tabHidden}>
+              {visited[3] && <Suspense fallback={<Spinner/>}><AdminTrainings token={token}/></Suspense>}
+            </div>
+            <div style={tab === 4 ? tabVisible : tabHidden}>
+              {visited[4] && <Suspense fallback={<Spinner/>}><AdminUsers token={token}/></Suspense>}
+            </div>
+            <div style={tab === 5 ? tabVisible : tabHidden}>
+              {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+            </div>
+            <div style={tab === 6 ? tabVisible : tabHidden}>
+              {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} onRegistrationsChange={() => checkRegistrations(token)} refreshKey={registrationsRefreshKey}/></Suspense>}
+            </div>
           </div>
         </div>
       ) : (
         /* MOBILE: 4 zakładki */
-        <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
-          {/* Terminarz — długie przytrzymanie przełącza widok admin ↔ klient */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", touchAction: "pan-y" }}>
           <div style={tab === 0 ? tabVisible : tabHidden}>
-            {scheduleView === "client"
-              ? <ScheduleTab activeGroups={ALL_GROUPS}/>
-              : <AdminSchedule token={token} refreshKey={scheduleRefreshKey}/>
-            }
+            {visited[0] && (scheduleView === "client"
+              ? <Suspense fallback={<Spinner/>}><ScheduleTab activeGroups={ALL_GROUPS}/></Suspense>
+              : <Suspense fallback={<Spinner/>}><AdminSchedule token={token} refreshKey={scheduleRefreshKey}/></Suspense>
+            )}
           </div>
-          {/* Wiadomości — długie przytrzymanie przełącza na Edytor szkoleń */}
           <div style={tab === 2 ? tabVisible : tabHidden}>
-            {msgView === "editor"
-              ? <AdminTrainings token={token}/>
-              : <AdminMessages token={token}/>
-            }
+            {visited[2] && (msgView === "editor"
+              ? <Suspense fallback={<Spinner/>}><AdminTrainings token={token}/></Suspense>
+              : <Suspense fallback={<Spinner/>}><AdminMessages token={token}/></Suspense>
+            )}
           </div>
-          <div style={tab === 4 ? tabVisible : tabHidden}><AdminBatchComplete token={token}/></div>
-          <div style={tab === 5 ? tabVisible : tabHidden}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></div>
+          <div style={tab === 4 ? tabVisible : tabHidden}>
+            {visited[4] && <Suspense fallback={<Spinner/>}><AdminUsers token={token}/></Suspense>}
+          </div>
+          <div style={tab === 5 ? tabVisible : tabHidden}>
+            {visited[5] && <Suspense fallback={<Spinner/>}><AdminInterested token={token} onContactedChange={() => checkInterests(token)} refreshKey={interestedRefreshKey}/></Suspense>}
+          </div>
+          <div style={tab === 6 ? tabVisible : tabHidden}>
+            {visited[6] && <Suspense fallback={<Spinner/>}><AdminRegistrations token={token} onRegistrationsChange={() => checkRegistrations(token)} refreshKey={registrationsRefreshKey}/></Suspense>}
+          </div>
         </div>
       )}
+
+      {/* Portal dla toastów — wewnątrz app-container, nie w viewport */}
+      <div id="toast-portal" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 99999 }} />
     </div>
   );
 }

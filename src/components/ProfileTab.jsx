@@ -1,13 +1,105 @@
-import { useState, memo } from "react";
+import { useState, lazy, Suspense } from "react";
 import { C, GROUPS } from "../lib/constants";
 import { TRAININGS } from "../data/trainings";
 import { db } from "../lib/supabase";
 import { calcProgress } from "../lib/helpers";
-import { Toggle, SecTitle } from "./SharedUI";
+import { Toggle, SecTitle, Spinner } from "./SharedUI";
 import { log, warn, err as logErr } from "../lib/logger";
 import { useT, useLang } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
-import { GramTab } from "./GramTab";
+
+// ─── LAZY — GramTab (~gamifikacja) ładuje się tylko gdy użytkownik kliknie
+// przycisk 🔥. Nie wchodzi do chunk shared-tabs przy starcie.
+const GramTab = lazy(() => import("./GramTab").then(m => ({ default: m.GramTab })));
+
+/* ─── Modal potwierdzenia zmiany nazwiska ─────────────────────────────────
+ * Wyświetlany PRZED zapisem gdy user zmienia imię/nazwisko.
+ * Po potwierdzeniu: zapis + name_locked=true → pole blokuje się na zawsze.
+ */
+function NameChangeConfirmModal({ oldName, newName, onConfirm, onCancel, T }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.55)", display: "flex",
+      alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      <div style={{
+        background: C.white, borderRadius: 12, maxWidth: 380, width: "100%",
+        boxShadow: "0 20px 60px rgba(0,0,0,.3)", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          background: "#2C2C2C", padding: "18px 20px",
+          borderBottom: `4px solid #e67e22`,
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>
+            {T.name_lock_modal_title}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 4 }}>
+            {T.name_lock_modal_subtitle}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 20px 0" }}>
+          <div style={{ fontSize: 13, color: C.greyDk, lineHeight: 1.6, marginBottom: 16 }}>
+            {T.name_lock_modal_body}
+          </div>
+
+          {/* Zmiana */}
+          <div style={{
+            background: "#FFF8F0", border: "1px solid #f0c080", borderRadius: 8,
+            padding: "12px 14px", marginBottom: 16, fontSize: 13,
+          }}>
+            <div style={{ color: C.greyMid, marginBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: .5 }}>
+              {T.name_lock_modal_label}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{
+                background: "#fde8e8", color: "#7a1a12", padding: "3px 10px",
+                borderRadius: 6, fontWeight: 600, textDecoration: "line-through",
+              }}>{oldName}</span>
+              <span style={{ color: C.greyMid, fontSize: 16 }}>→</span>
+              <span style={{
+                background: "rgba(138,183,62,.15)", color: "#3a5a10", padding: "3px 10px",
+                borderRadius: 6, fontWeight: 700,
+              }}>{newName}</span>
+            </div>
+          </div>
+
+          <div style={{
+            fontSize: 12, color: "#7a4a00", lineHeight: 1.5,
+            background: "#fffbea", border: "1px solid #f5d78e",
+            borderRadius: 8, padding: "10px 12px", marginBottom: 20,
+          }}>
+            {T.name_lock_modal_footer}
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${C.grey}` }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: 16, background: C.white, border: "none",
+              borderRight: `1px solid ${C.grey}`, fontSize: 14, fontWeight: 600,
+              color: C.greyDk, cursor: "pointer",
+            }}>
+            {T.name_lock_cancel}
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1, padding: 16, background: "#e67e22", border: "none",
+              fontSize: 14, fontWeight: 700, color: C.white, cursor: "pointer",
+            }}>
+            {T.name_lock_confirm}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout, trainerView, setTrainerView }) {
   const { user, setUser } = useUser();
@@ -22,30 +114,57 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
   const [saved,     setSaved]     = useState(false);
   const [saveErr,   setSaveErr]   = useState("");
   const [showGram,  setShowGram]  = useState(false);
+
+  // Modal potwierdzenia zmiany nazwiska
+  const [pendingNameSave, setPendingNameSave] = useState(false);
+
   const progress = calcProgress(completed, activeGroups);
 
-  async function saveProfile() {
+  // Czy użytkownik próbuje zmienić imię/nazwisko?
+  const nameChanged = editName.trim() !== "" && editName.trim() !== user.displayName;
+
+  async function doSaveProfile(lockName) {
     const name       = editName.trim()       || user.name;
     const stanowisko = editStanowisko.trim() || null;
     const firma      = editFirma.trim()      || null;
     const phone      = editPhone.trim()      || null;
     setSaving(true); setSaveErr("");
     try {
-      log("[SAVE PROFILE] updating user id:", user.id, { name, stanowisko, firma, phone });
-      const res = await db.update(user.accessToken, "profiles", `id=eq.${user.id}`, { name, stanowisko, firma, phone });
+      const payload = { name, stanowisko, firma, phone };
+      // Jeśli zmieniano nazwisko — przy tej samej operacji zapisujemy blokadę
+      if (lockName) payload.name_locked = true;
+
+      log("[SAVE PROFILE] updating user id:", user.id, payload);
+      const res = await db.update(user.accessToken, "profiles", `id=eq.${user.id}`, payload);
       log("[SAVE PROFILE] result:", res);
       if (!res || res.length === 0) {
         warn("[SAVE PROFILE] OSTRZEŻENIE: update zwrócił pustą tablicę — prawdopodobnie RLS blokuje UPDATE na tabeli users");
         setSaveErr(T.no_permission);
         return;
       }
-      setUser(p => ({...p, displayName:name, displayRole:stanowisko||"", stanowisko, firma:firma||"", name, phone}));
+      setUser(p => ({
+        ...p,
+        displayName: name, displayRole: stanowisko || "", stanowisko,
+        firma: firma || "", name, phone,
+        ...(lockName ? { name_locked: true } : {}),
+      }));
       setEditing(false); setSaved(true); setTimeout(() => setSaved(false), 2500);
     } catch(e) {
       logErr("[SAVE PROFILE] ERROR:", e.message);
       setSaveErr(T.save_error + e.message);
+    } finally {
+      setSaving(false);
+      setPendingNameSave(false);
     }
-    finally { setSaving(false); }
+  }
+
+  async function saveProfile() {
+    // Jeśli imię/nazwisko się zmieniło i nie jest jeszcze zablokowane → pokaż modal
+    if (nameChanged && !user.name_locked) {
+      setPendingNameSave(true);
+      return;
+    }
+    await doSaveProfile(false);
   }
 
   async function toggleGroup(gid) {
@@ -63,7 +182,7 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
 
   return (
     <>
-      <div style={{background:C.greyBg,flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
+      <div style={{background:C.greyBg,flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y",paddingBottom:"calc(72px + env(safe-area-inset-bottom, 0px))"}}>
       <div style={{background:C.white,borderBottom:`1px solid ${C.grey}`,padding:20,display:"flex",gap:16,alignItems:"center"}}>
         <div style={{width:52,height:52,background:C.black,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <span style={{color:C.white,fontWeight:700,fontSize:18}}>{initials}</span>
@@ -81,13 +200,56 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
       {editing && (
         <div style={{background:C.white,margin:"8px 12px 0",padding:20,boxShadow:"0 1px 3px rgba(0,0,0,.08)",borderTop:`3px solid ${C.green}`}}>
           <div style={{fontSize:11,fontWeight:700,letterSpacing:1,color:C.greyDk,marginBottom:16,textTransform:"uppercase"}}>Edytuj dane</div>
-          {[[T.full_name,editName,setEditName,T.example_name],[T.position,editStanowisko,setEditStanowisko,T.optional],[T.company,editFirma,setEditFirma,T.optional],["Telefon (opcjonalnie)",editPhone,setEditPhone,"np. +48 600 000 000"]].map(([lbl,val,set,ph]) => (
+
+          {/* ── Pole imię i nazwisko — z logiką blokady ── */}
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:C.greyDk,marginBottom:6,letterSpacing:.5}}>
+              {T.full_name}
+              {user.name_locked && (
+                <span style={{
+                  marginLeft:8, fontSize:10, fontWeight:700, letterSpacing:.5,
+                  color:"#7a4a00", background:"#fffbea", border:"1px solid #f5d78e",
+                  borderRadius:4, padding:"2px 7px",
+                }}>
+                  {T.name_lock_badge}
+                </span>
+              )}
+            </label>
+            <input
+              style={{
+                width:"100%", border:"none",
+                borderBottom:`2px solid ${user.name_locked ? C.grey : C.green}`,
+                padding:"9px 0", fontSize:15,
+                color: user.name_locked ? C.greyMid : C.black,
+                outline:"none", boxSizing:"border-box",
+                background: "transparent",
+                cursor: user.name_locked ? "not-allowed" : "text",
+              }}
+              value={editName}
+              placeholder={T.example_name}
+              disabled={user.name_locked}
+              onChange={e => setEditName(e.target.value)}
+            />
+            {user.name_locked ? (
+              <div style={{fontSize:11,color:"#7a4a00",marginTop:5,lineHeight:1.4}}>
+                {T.name_lock_frozen_hint}
+              </div>
+            ) : (
+              <div style={{fontSize:11,color:C.greyMid,marginTop:5,lineHeight:1.4}}>
+                {T.name_lock_hint}
+              </div>
+            )}
+          </div>
+
+          {/* Pozostałe pola — bez blokady */}
+          {[[T.position,editStanowisko,setEditStanowisko,T.optional],[T.company,editFirma,setEditFirma,T.optional],["Telefon (opcjonalnie)",editPhone,setEditPhone,"np. +48 600 000 000"]].map(([lbl,val,set,ph]) => (
             <div key={lbl} style={{marginBottom:16}}>
               <label style={{display:"block",fontSize:11,fontWeight:700,color:C.greyDk,marginBottom:6,letterSpacing:.5}}>{lbl}</label>
               <input style={{width:"100%",border:"none",borderBottom:`2px solid ${C.green}`,padding:"9px 0",fontSize:15,color:C.black,outline:"none",boxSizing:"border-box"}}
                 value={val} placeholder={ph} onChange={e => set(e.target.value)}/>
             </div>
           ))}
+
           {saveErr && <div style={{color:C.red,fontSize:12,marginBottom:12}}>{saveErr}</div>}
           <div style={{fontSize:11,color:C.greyMid,marginBottom:16}}>{T.profile_note}</div>
           <div style={{display:"flex",gap:8}}>
@@ -184,7 +346,19 @@ export function ProfileTab({ completed, activeGroups, setActiveGroups, onLogout,
         <button style={{background:C.black,border:"none",color:C.white,padding:16,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:8}} onClick={onLogout}>{T.logout}</button>
       </div>
     </div>
-    {showGram && <GramTab onClose={() => setShowGram(false)}/>}
+
+    {/* Modal potwierdzenia zmiany nazwiska */}
+    {pendingNameSave && (
+      <NameChangeConfirmModal
+        oldName={user.displayName}
+        newName={editName.trim()}
+        onConfirm={() => doSaveProfile(true)}
+        onCancel={() => setPendingNameSave(false)}
+        T={T}
+      />
+    )}
+
+    {showGram && <Suspense fallback={<Spinner/>}><GramTab onClose={() => setShowGram(false)}/></Suspense>}
     </>
   );
 }
