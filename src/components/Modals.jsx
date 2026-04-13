@@ -6,6 +6,7 @@ import { useT } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
 import { useToast } from "../lib/ToastContext";
 import { err as logErr } from "../lib/logger";
+import { db } from "../lib/supabase";
 
 // certGenerator ładowany tylko gdy użytkownik klika "Pobierz PDF"
 // dzięki temu @react-pdf/renderer (~1.5MB) nie trafia do głównego bundla
@@ -103,8 +104,17 @@ export function CertModal({ entry, user, onClose }) {
         trainer:    trainerNum,
         uid:        user.id || "",
       })
-    ).then(id => {
-      if (!cancelled) setCertId(id);
+    ).then(async id => {
+      if (cancelled) return;
+      setCertId(id);
+      // Zapisz cert_id do bazy — żeby przy kolejnym wejściu był od razu gotowy
+      try {
+        await db.update(
+          user.accessToken, "completions",
+          `user_id=eq.${user.id}&training_id=eq.${entry.training.id}`,
+          { cert_id: id }
+        );
+      } catch { /* nie blokuj UI jeśli zapis się nie uda */ }
     }).catch(() => {
       if (!cancelled) setCertId("ERR");
     });
