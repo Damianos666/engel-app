@@ -401,56 +401,49 @@ function AppRoot({ onMounted }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = useCallback(async (entry) => {
-    // Optymistyczny update — od razu widoczne ukończenie, cert_id jeszcze null
-    setCompleted(p => {
-      const filtered = p.filter(c => c.training.id !== entry.training.id);
-      return [...filtered, { ...entry, cert_id: null }];
-    });
+    const { generateCertId, isDuplicateCertId } = await import("./lib/certId");
+    const MAX_ATTEMPTS = 5;
 
-    try {
-      // Generuj cert_id JEDEN raz — zapisujemy do DB i do lokalnego stanu
-      let certId = null;
-      try {
-        const { generateCertId } = await import("./lib/certId");
-        const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
-        certId = await generateCertId({
-          trainingId: entry.training.id,
-          date:       entry.date,
-          trainer:    trainerNum,
-          uid:        user.id || "",
-        });
-      } catch { /* cert_id opcjonalny — nie blokuje zapisu */ }
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const certId = generateCertId({ trainingId: entry.training.id, date: entry.date });
 
-      const payload = {
-        training_data:      entry.training,
-        date:               entry.date,
-        code_key:           entry.key,
-        trainer:            entry.trainer || null,
-        cert_id:            certId,
-        user_display_name:  user.displayName || null,
-      };
-      const updated = await db.update(
-        user.accessToken, "completions",
-        `user_id=eq.${user.id}&training_id=eq.${entry.training.id}`,
-        payload
-      );
-      if (!updated || updated.length === 0) {
-        await db.insert(user.accessToken, "completions", {
-          user_id:     user.id,
-          training_id: entry.training.id,
-          ...payload,
-        });
-      }
-
-      // Po potwierdzeniu zapisu — zaktualizuj stan z cert_id z bazy
+      // Optymistyczny update — modal od razu ma cert_id
       setCompleted(p => {
         const filtered = p.filter(c => c.training.id !== entry.training.id);
         return [...filtered, { ...entry, cert_id: certId }];
       });
 
-    } catch(e) {
-      logErr("[COMPLETE] ERROR saving:", e.message);
-      addToast("⚠️ Błąd zapisu: " + e.message);
+      try {
+        const payload = {
+          training_data:      entry.training,
+          date:               entry.date,
+          code_key:           entry.key,
+          trainer:            entry.trainer || null,
+          cert_id:            certId,
+          user_display_name:  user.displayName || null,
+        };
+        const updated = await db.update(
+          user.accessToken, "completions",
+          `user_id=eq.${user.id}&training_id=eq.${entry.training.id}`,
+          payload
+        );
+        if (!updated || updated.length === 0) {
+          await db.insert(user.accessToken, "completions", {
+            user_id:     user.id,
+            training_id: entry.training.id,
+            ...payload,
+          });
+        }
+        break; // sukces — wyjdź z pętli
+      } catch(e) {
+        if (isDuplicateCertId(e) && attempt < MAX_ATTEMPTS - 1) {
+          log(`[COMPLETE] cert_id kolizja (próba ${attempt + 1}), genenuję nowy…`);
+          continue; // wygeneruj nowy cert_id i spróbuj ponownie
+        }
+        logErr("[COMPLETE] ERROR saving:", e.message);
+        addToast("⚠️ Błąd zapisu: " + e.message);
+        break;
+      }
     }
   }, [user, addToast]);
 
