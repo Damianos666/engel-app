@@ -86,10 +86,30 @@ export function CertModal({ entry, user, onClose }) {
   const { addToast } = useToast();
   const { token } = useUser();
   const [generating, setGenerating] = useState(false);
-  // cert_id pochodzi zawsze z entry (zapisany w DB przez handleComplete)
-  // nigdy nie jest regenerowany po stronie klienta
-  const certId = entry.cert_id || null;
+  // Priorytet: cert_id z bazy (przez entry) — zero HMAC w przeglądarce.
+  // Fallback useEffect odpala się tylko gdy cert_id brakuje w rekordzie
+  // (stare wpisy sprzed migracji lub krótkie okno po skanowaniu QR).
+  const [certId, setCertId] = useState(entry.cert_id || null);
   const sub = [user.displayRole, user.firma].filter(Boolean).join(" · ");
+
+  useEffect(() => {
+    if (certId) return; // już mamy z bazy — nie generuj
+    let cancelled = false;
+    const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
+    import("../lib/certId").then(({ generateCertId }) =>
+      generateCertId({
+        trainingId: entry.training.id,
+        date:       entry.date,
+        trainer:    trainerNum,
+        uid:        user.id || "",
+      })
+    ).then(id => {
+      if (!cancelled) setCertId(id);
+    }).catch(() => {
+      if (!cancelled) setCertId("ERR");
+    });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function downloadPDF() {
     setGenerating(true);
@@ -114,7 +134,7 @@ export function CertModal({ entry, user, onClose }) {
     }
   }
 
-  const certReady = !!certId;
+  const certReady = !!certId && certId !== 'ERR';
 
   return (
     <Portal>
