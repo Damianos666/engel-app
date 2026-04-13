@@ -32,7 +32,12 @@ export function AdminCodeGen({ defaultTrainer }) {
       const days     = mode === "special" ? specialDays : null;
       const data     = await edge.generateCode(token, short, selTrainer, mode === "special", specialTitle, days);
       // Append days to verifyUrl so the scanner can read it
-      setResult(data);
+      const appUrl   = import.meta.env.VITE_APP_URL || window.location.origin;
+      const params   = new URLSearchParams();
+      if (mode === "special" && specialTitle) params.set("title", specialTitle);
+      if (mode === "special" && days)         params.set("days",  days);
+      const query    = params.toString() ? `?${params.toString()}` : "";
+      const verifyUrl = `${appUrl}/verify/${data.code}${query}`;
       setResult({ ...data, verifyUrl });
       const QRCode = await import("qrcode");
       const dataUrl = await QRCode.default.toDataURL(verifyUrl, {
