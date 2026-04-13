@@ -62,6 +62,8 @@ const PORTRAIT_CFG = {
   certDates:   { top: 600, left: 60,  width: 476, fontSize: 10,                       color: '#444444' },
   trainerName: { top: 710, right: 42, width: 149, fontSize: 9,  fontWeight: 'bold',   color: '#1a1a1a' },
   trainerLabel:{ top: 730, right: 42, width: 149, fontSize: 8,                        color: '#555555' },
+  certNumLabel:{ top: 800, left: 60,  width: 220, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
+  certNum:     { top: 812, left: 60,  width: 220, fontSize: 8,                        color: '#666666', letterSpacing: 1 },
 };
 
 const LANDSCAPE_CFG = {
@@ -71,10 +73,12 @@ const LANDSCAPE_CFG = {
   certDates:   { top: 548, left: 202, width: 438, fontSize: 9,                        color: '#444444' },
   trainerName: { top: 570, right: 42, width: 168, fontSize: 9,  fontWeight: 'bold',   color: '#1a1a1a' },
   trainerLabel:{ top: 576, right: 42, width: 168, fontSize: 8,                        color: '#555555' },
+  certNumLabel:{ top: 558, left: 42,  width: 200, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
+  certNum:     { top: 568, left: 42,  width: 200, fontSize: 8,                        color: '#666666', letterSpacing: 1 },
 };
 
 // ─── KOMPONENT PDF ────────────────────────────────────────────────────────────
-const CertificateDocument = ({ participantName, trainingTitle, dateRange, backgroundSrc, trainerName, orientation }) => {
+const CertificateDocument = ({ participantName, trainingTitle, dateRange, backgroundSrc, trainerName, orientation, certId }) => {
   const isLandscape = orientation === 'landscape';
   const W = isLandscape ? 842 : 595;
   const H = isLandscape ? 595 : 842;
@@ -139,6 +143,13 @@ const CertificateDocument = ({ participantName, trainingTitle, dateRange, backgr
             </>
           )}
 
+          {certId && (
+            <>
+              <Block k="certNumLabel">NR CERTYFIKATU</Block>
+              <Block k="certNum">{certId}</Block>
+            </>
+          )}
+
         </View>
       </Page>
     </Document>
@@ -146,7 +157,7 @@ const CertificateDocument = ({ participantName, trainingTitle, dateRange, backgr
 };
 
 // ─── GŁÓWNA FUNKCJA ───────────────────────────────────────────────────────────
-export async function generateCertificate({ participantName, trainingTitle, parsedCode, token }) {
+export async function generateCertificate({ participantName, trainingTitle, certId, parsedCode, token }) {
   const trainer = {
     name:        TRAINER_NAMES[parsedCode.trainerNum] || null,
     orientation: TRAINER_ORIENTATION[parsedCode.trainerNum] || 'portrait',
@@ -169,6 +180,7 @@ export async function generateCertificate({ participantName, trainingTitle, pars
       backgroundSrc={bg}
       trainerName={trainer.name}
       orientation={trainer.orientation}
+      certId={certId || null}
     />
   ).toBlob();
 
