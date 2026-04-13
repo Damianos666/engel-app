@@ -28,6 +28,7 @@ const AdminQuiz    = lazy(() => import("./components/admin/AdminQuiz").then(m =>
 // Publiczne strony — lazy, bez logowania
 const RegistrationForm = lazy(() => import("./components/RegistrationForm").then(m => ({ default: m.RegistrationForm })));
 const TermsPage        = lazy(() => import("./components/TermsPage").then(m => ({ default: m.TermsPage })));
+const VerifyPage       = lazy(() => import("./components/VerifyPage").then(m => ({ default: m.VerifyPage })));
 
 // POPRAWKA: Error Boundary — łapie niesłowne błędy JS i pokazuje ekran błędu
 // zamiast białego ekranu. Klasa bo React Error Boundary wymaga komponentu klasowego.
@@ -404,11 +405,26 @@ function AppRoot({ onMounted }) {
       return [...filtered, entry];
     });
     try {
+      // Generuj cert_id (HMAC-SHA256) — zapisywany w bazie dla strony /verify/
+      let certId = null;
+      try {
+        const { generateCertId } = await import("./lib/certId");
+        const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
+        certId = await generateCertId({
+          trainingId: entry.training.id,
+          date:       entry.date,
+          trainer:    trainerNum,
+          uid:        user.id || "",
+        });
+      } catch { /* cert_id opcjonalny — nie blokuje zapisu */ }
+
       const payload = {
-        training_data: entry.training,
-        date:          entry.date,
-        code_key:      entry.key,
-        trainer:       entry.trainer || null,
+        training_data:      entry.training,
+        date:               entry.date,
+        code_key:           entry.key,
+        trainer:            entry.trainer || null,
+        cert_id:            certId,
+        user_display_name:  user.displayName || null,
       };
       const updated = await db.update(
         user.accessToken, "completions",
@@ -470,7 +486,8 @@ function AppRoot({ onMounted }) {
   // Klasa public-page na html+body włącza overflow:auto (CSS w index.html).
   // Klasa jest TYLKO na public pages — nie wycieka do widoku app.
   const pathname = window.location.pathname;
-  const isPublicPage = pathname === "/rejestracja" || pathname === "/regulamin";
+  const isVerifyPage = pathname.startsWith("/verify/");
+  const isPublicPage = pathname === "/rejestracja" || pathname === "/regulamin" || isVerifyPage;
   if (isPublicPage) {
     document.documentElement.classList.add("public-page");
     document.body.classList.add("public-page");
@@ -489,6 +506,13 @@ function AppRoot({ onMounted }) {
     return (
       <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
         <TermsPage />
+      </Suspense>
+    );
+  }
+  if (isVerifyPage) {
+    return (
+      <Suspense fallback={<div style={styles.suspenseFallback}><Spinner/></div>}>
+        <VerifyPage />
       </Suspense>
     );
   }
