@@ -383,6 +383,7 @@ function AppRoot({ onMounted }) {
         key:        c.code_key,
         trainer:    c.trainer || null,
         trainerNum: parseInt(c.code_key?.slice(-1)) || 1,
+        cert_id:    c.cert_id || null,
       })));
 
       const overridesMap = {};
@@ -400,12 +401,14 @@ function AppRoot({ onMounted }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = useCallback(async (entry) => {
+    // Optymistyczny update — od razu widoczne ukończenie, cert_id jeszcze null
     setCompleted(p => {
       const filtered = p.filter(c => c.training.id !== entry.training.id);
-      return [...filtered, entry];
+      return [...filtered, { ...entry, cert_id: null }];
     });
+
     try {
-      // Generuj cert_id (HMAC-SHA256) — zapisywany w bazie dla strony /verify/
+      // Generuj cert_id JEDEN raz — zapisujemy do DB i do lokalnego stanu
       let certId = null;
       try {
         const { generateCertId } = await import("./lib/certId");
@@ -438,6 +441,13 @@ function AppRoot({ onMounted }) {
           ...payload,
         });
       }
+
+      // Po potwierdzeniu zapisu — zaktualizuj stan z cert_id z bazy
+      setCompleted(p => {
+        const filtered = p.filter(c => c.training.id !== entry.training.id);
+        return [...filtered, { ...entry, cert_id: certId }];
+      });
+
     } catch(e) {
       logErr("[COMPLETE] ERROR saving:", e.message);
       addToast("⚠️ Błąd zapisu: " + e.message);
