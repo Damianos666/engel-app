@@ -62,8 +62,8 @@ const PORTRAIT_CFG = {
   certDates:   { top: 600, left: 60,  width: 476, fontSize: 10,                       color: '#444444' },
   trainerName: { top: 710, right: 42, width: 149, fontSize: 9,  fontWeight: 'bold',   color: '#1a1a1a' },
   trainerLabel:{ top: 730, right: 42, width: 149, fontSize: 8,                        color: '#555555' },
-  certNumLabel:{ top: 800, left: 60,  width: 220, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
-  certNum:     { top: 812, left: 60,  width: 220, fontSize: 8,                        color: '#666666', letterSpacing: 1 },
+  certNumLabel:{ top: 800, left: 60,  width: 476, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
+  certNum:     { top: 812, left: 60,  width: 476, fontSize: 9,                        color: '#666666', letterSpacing: 2 },
 };
 
 const LANDSCAPE_CFG = {
@@ -73,8 +73,8 @@ const LANDSCAPE_CFG = {
   certDates:   { top: 548, left: 202, width: 438, fontSize: 9,                        color: '#444444' },
   trainerName: { top: 570, right: 42, width: 168, fontSize: 9,  fontWeight: 'bold',   color: '#1a1a1a' },
   trainerLabel:{ top: 576, right: 42, width: 168, fontSize: 8,                        color: '#555555' },
-  certNumLabel:{ top: 558, left: 42,  width: 200, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
-  certNum:     { top: 568, left: 42,  width: 200, fontSize: 8,                        color: '#666666', letterSpacing: 1 },
+  certNumLabel:{ top: 558, left: 202, width: 438, fontSize: 7,  fontWeight: 'bold',   color: '#999999', letterSpacing: 1.5 },
+  certNum:     { top: 568, left: 202, width: 438, fontSize: 9,                        color: '#666666', letterSpacing: 2 },
 };
 
 // ─── KOMPONENT PDF ────────────────────────────────────────────────────────────
