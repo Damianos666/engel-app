@@ -258,30 +258,46 @@ export function AdminBatchComplete({ token }) {
 
       try {
         const codeKey = syntheticKey(item.training.id, item.date, item.trainerNum);
-        const payload = {
-          user_id:       item.userId,
-          training_id:   item.training.id,
-          training_data: item.training,
-          date:          item.date,
-          code_key:      codeKey,
-          trainer:       item.trainerName,
-        };
+        const { generateCertId, isDuplicateCertId } = await import("../../lib/certId");
+        const MAX_ATTEMPTS = 5;
 
-        // Sprawdź czy rekord już istnieje
+        // Sprawdź czy rekord już istnieje (raz, przed pętlą)
         const existing = await db.get(token, "completions",
-          `user_id=eq.${item.userId}&training_id=eq.${item.training.id}&select=id`
+          `user_id=eq.${item.userId}&training_id=eq.${item.training.id}&select=id,cert_id`
         );
 
-        if (existing && existing.length > 0) {
-          // UPDATE istniejącego rekordu
-          await db.update(token, "completions",
-            `user_id=eq.${item.userId}&training_id=eq.${item.training.id}`,
-            { training_data: payload.training_data, date: payload.date, code_key: codeKey, trainer: payload.trainer }
-          );
-        } else {
-          // INSERT nowego rekordu
-          await db.insert(token, "completions", payload);
+        let saved = false;
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+          // Jeśli UPDATE i rekord już ma cert_id — zachowaj istniejący
+          const certId = (existing?.[0]?.cert_id) || generateCertId({ trainingId: item.training.id, date: item.date });
+          const payload = {
+            user_id:            item.userId,
+            training_id:        item.training.id,
+            training_data:      item.training,
+            date:               item.date,
+            code_key:           codeKey,
+            trainer:            item.trainerName,
+            cert_id:            certId,
+            user_display_name:  item.displayName || null,
+          };
+
+          try {
+            if (existing && existing.length > 0) {
+              await db.update(token, "completions",
+                `user_id=eq.${item.userId}&training_id=eq.${item.training.id}`,
+                { training_data: payload.training_data, date: payload.date, code_key: codeKey, trainer: payload.trainer, user_display_name: payload.user_display_name, cert_id: certId }
+              );
+            } else {
+              await db.insert(token, "completions", payload);
+            }
+            saved = true;
+            break;
+          } catch(insertErr) {
+            if (isDuplicateCertId(insertErr) && attempt < MAX_ATTEMPTS - 1) continue;
+            throw insertErr;
+          }
         }
+        if (!saved) throw new Error("Nie udało się wygenerować unikalnego cert_id po 5 próbach");
 
         setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: "ok", codeKey } : q));
       } catch(e) {
