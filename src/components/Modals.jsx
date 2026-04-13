@@ -30,9 +30,8 @@ function buildLinkedInUrl(entry, certId) {
     issueYear:      yyyy,
     issueMonth:     String(parseInt(mm, 10)),
     certId:         certId,
-    // certUrl: dodaj tutaj URL strony weryfikacji gdy będzie gotowa,
-    // np. `https://academy.engel.com/verify/${certId}`
-  });
+    certUrl: `https://engelexpert.academy/verify/${certId}`
+   });
   return `https://www.linkedin.com/profile/add?${params}`;
 }
 
