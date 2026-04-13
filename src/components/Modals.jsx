@@ -6,7 +6,6 @@ import { useT } from "../lib/LangContext";
 import { useUser } from "../lib/UserContext";
 import { useToast } from "../lib/ToastContext";
 import { err as logErr } from "../lib/logger";
-import { db } from "../lib/supabase";
 
 // certGenerator ładowany tylko gdy użytkownik klika "Pobierz PDF"
 // dzięki temu @react-pdf/renderer (~1.5MB) nie trafia do głównego bundla
@@ -87,37 +86,53 @@ export function CertModal({ entry, user, onClose }) {
   const { addToast } = useToast();
   const { token } = useUser();
   const [generating, setGenerating] = useState(false);
-  // Priorytet: cert_id z bazy (przez entry) — zero HMAC w przeglądarce.
-  // Fallback useEffect odpala się tylko gdy cert_id brakuje w rekordzie
-  // (stare wpisy sprzed migracji lub krótkie okno po skanowaniu QR).
+  // cert_id pochodzi z entry (załadowany z DB przy logowaniu lub tuż po skanowaniu QR).
+  // Fallback odpala się tylko dla starych rekordów które nie mają cert_id w DB.
   const [certId, setCertId] = useState(entry.cert_id || null);
   const sub = [user.displayRole, user.firma].filter(Boolean).join(" · ");
 
   useEffect(() => {
-    if (certId) return; // już mamy z bazy — nie generuj
+    if (certId) return; // już mamy — nie rób nic
     let cancelled = false;
-    const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
-    import("../lib/certId").then(({ generateCertId }) =>
-      generateCertId({
-        trainingId: entry.training.id,
-        date:       entry.date,
-        trainer:    trainerNum,
-        uid:        user.id || "",
-      })
-    ).then(async id => {
-      if (cancelled) return;
-      setCertId(id);
-      // Zapisz cert_id do bazy — żeby przy kolejnym wejściu był od razu gotowy
+
+    async function resolveCertId() {
       try {
-        await db.update(
+        // 1. Spróbuj pobrać z bazy — może już jest (race condition po skanowaniu)
+        const { db } = await import("../lib/supabase");
+        const rows = await db.get(
           user.accessToken, "completions",
-          `user_id=eq.${user.id}&training_id=eq.${entry.training.id}`,
-          { cert_id: id }
+          `user_id=eq.${user.id}&training_id=eq.${entry.training.id}&select=cert_id`
         );
-      } catch { /* nie blokuj UI jeśli zapis się nie uda */ }
-    }).catch(() => {
-      if (!cancelled) setCertId("ERR");
-    });
+        const fromDb = rows?.[0]?.cert_id;
+        if (fromDb) {
+          if (!cancelled) setCertId(fromDb);
+          return;
+        }
+
+        // 2. Stary rekord bez cert_id — wygeneruj i zapisz do bazy
+        const { generateCertId, isDuplicateCertId } = await import("../lib/certId");
+        const MAX_ATTEMPTS = 5;
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+          const id = generateCertId({ trainingId: entry.training.id, date: entry.date });
+          try {
+            await db.update(
+              user.accessToken, "completions",
+              `user_id=eq.${user.id}&training_id=eq.${entry.training.id}`,
+              { cert_id: id }
+            );
+            if (!cancelled) setCertId(id);
+            break;
+          } catch(retryErr) {
+            if (isDuplicateCertId(retryErr) && attempt < MAX_ATTEMPTS - 1) continue;
+            throw retryErr;
+          }
+        }
+      } catch {
+        if (!cancelled) setCertId("ERR");
+      }
+    }
+
+    resolveCertId();
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,6 +159,7 @@ export function CertModal({ entry, user, onClose }) {
     }
   }
 
+  // certId jest gotowy gdy nie jest już wartością początkową "…"
   const certReady = !!certId && certId !== 'ERR';
 
   return (
@@ -169,7 +185,7 @@ export function CertModal({ entry, user, onClose }) {
             <div style={{height:1,background:C.grey,margin:"16px 0"}}/>
             <div style={{display:"flex",gap:32}}>
               <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>DATA</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{entry.date}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>NR CERTYFIKATU</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{certId ?? <span style={{color:"#bbb",fontSize:12}}>generowanie…</span>}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>NR CERTYFIKATU</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{certId && certId !== "ERR" ? certId : <span style={{color:"#bbb",fontSize:12}}>{certId === "ERR" ? "błąd" : "generowanie…"}</span>}</div></div>
             </div>
             {entry.trainer && (
               <>
