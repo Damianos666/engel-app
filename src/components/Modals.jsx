@@ -16,6 +16,35 @@ async function loadAndGenerate(args) {
 
 const LOGO_URL = "/logo.png";
 
+// ─── LINKEDIN DEEP LINK ───────────────────────────────────────────────────────
+// Otwiera LinkedIn z pre-wypełnionym formularzem "Dodaj certyfikat".
+// organizationId: ID firmy ENGEL na LinkedIn (https://linkedin.com/company/76790490)
+const ENGEL_LINKEDIN_ORG_ID = "76790490";
+
+function buildLinkedInUrl(entry, certId) {
+  const [dd, mm, yyyy] = entry.date.split(".");
+  const params = new URLSearchParams({
+    startTask:      "CERTIFICATION_NAME",
+    name:           entry.training.title,
+    organizationId: ENGEL_LINKEDIN_ORG_ID,
+    issueYear:      yyyy,
+    issueMonth:     String(parseInt(mm, 10)),
+    certId:         certId,
+    // certUrl: dodaj tutaj URL strony weryfikacji gdy będzie gotowa,
+    // np. `https://academy.engel.com/verify/${certId}`
+  });
+  return `https://www.linkedin.com/profile/add?${params}`;
+}
+
+// Ikona LinkedIn (SVG inline, 16×16)
+function LinkedInIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{flexShrink:0}}>
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  );
+}
+
 /* ─── PORTAL WRAPPER ─────────────────────────────────────────────────────── */
 // Renderuje dzieci bezpośrednio w document.body — omija overflow:hidden rodzica
 // i naprawia position:fixed na iOS Safari wewnątrz app-container.
@@ -104,6 +133,9 @@ export function CertModal({ entry, user, onClose }) {
     }
   }
 
+  // certId jest gotowy gdy nie jest już wartością początkową "…"
+  const certReady = certId !== "…" && certId !== "ERR";
+
   return (
     <Portal>
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"16px",fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif"}} onClick={onClose}>
@@ -137,18 +169,51 @@ export function CertModal({ entry, user, onClose }) {
               </>
             )}
           </div>
-          <div style={{borderTop:`1px solid ${C.grey}`,padding:"12px 24px",display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button onClick={onClose}
-              style={{background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"12px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-              Zamknij
-            </button>
-            <button onClick={downloadPDF} disabled={generating}
-              style={{background:generating?C.greyDk:C.green,border:"none",color:C.white,padding:"12px 24px",fontSize:13,fontWeight:600,cursor:generating?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:8}}>
-              {generating
-                ? <><span style={{width:14,height:14,border:"2px solid rgba(255,255,255,.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin .7s linear infinite"}}/> Generuję...</>
-                : <>📄 Pobierz PDF</>
-              }
-            </button>
+
+          {/* ── PRZYCISKI AKCJI ─────────────────────────────────────────── */}
+          <div style={{borderTop:`1px solid ${C.grey}`,padding:"12px 24px",display:"flex",flexDirection:"column",gap:8}}>
+
+            {/* Wiersz 1: Zamknij + Pobierz PDF */}
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={onClose}
+                style={{background:"none",border:`1px solid ${C.grey}`,color:C.greyDk,padding:"12px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Zamknij
+              </button>
+              <button onClick={downloadPDF} disabled={generating}
+                style={{background:generating?C.greyDk:C.green,border:"none",color:C.white,padding:"12px 24px",fontSize:13,fontWeight:600,cursor:generating?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:8}}>
+                {generating
+                  ? <><span style={{width:14,height:14,border:"2px solid rgba(255,255,255,.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin .7s linear infinite"}}/> Generuję...</>
+                  : <>📄 Pobierz PDF</>
+                }
+              </button>
+            </div>
+
+            {/* Wiersz 2: Dodaj do LinkedIn — pełna szerokość */}
+            <a
+              href={certReady ? buildLinkedInUrl(entry, certId) : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={!certReady ? e => e.preventDefault() : undefined}
+              style={{
+                display:         "flex",
+                alignItems:      "center",
+                justifyContent:  "center",
+                gap:             8,
+                width:           "100%",
+                padding:         "12px 0",
+                background:      certReady ? "#0A66C2" : C.greyDk,
+                color:           "#fff",
+                fontSize:        13,
+                fontWeight:      600,
+                textDecoration:  "none",
+                cursor:          certReady ? "pointer" : "not-allowed",
+                opacity:         certReady ? 1 : 0.6,
+                boxSizing:       "border-box",
+              }}>
+              <LinkedInIcon />
+              {certReady ? "Dodaj do LinkedIn" : "Ładowanie…"}
+            </a>
+
           </div>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
