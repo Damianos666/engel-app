@@ -172,26 +172,8 @@ export async function generateCertificate({ participantName, trainingTitle, pars
     />
   ).toBlob();
 
-  // Zamiana polskich znaków na ASCII
-  const plMap = { ą:'a',ę:'e',ś:'s',ź:'z',ż:'z',ó:'o',ł:'l',ć:'c',ń:'n',
-                  Ą:'A',Ę:'E',Ś:'S',Ź:'Z',Ż:'Z',Ó:'O',Ł:'L',Ć:'C',Ń:'N' };
-  const dePL = str => str.replace(/[ąęśźżółćńĄĘŚŹŻÓŁĆŃ]/g, c => plMap[c] || c);
-
-  // safeName: polskie znaki → ASCII, spacje → _, reszta specjalna usunięta
-  const safeName = dePL(participantName)
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_]/g, '');
-
-  // Kod szkolenia: dla zwykłego bierzemy prefix (np. "RTM-viper"),
-  // dla specjalnego sanityzujemy tytuł szkolenia
-  const trainingCode = parsedCode.isSpecial
-    ? dePL(trainingTitle).replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')
-    : parsedCode.prefix;                  // np. "RTM-viper" — zostawiamy myślnik
-
-  // Data z parsedCode.date (DD.MM.YYYY) → DD-MM-YYYY
-  const safeDate = parsedCode.date.replace(/\./g, '-');
-
-  const fileName = `${safeName}_${trainingCode}_${safeDate}.pdf`;
+  const safeName = participantName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_ąęśźżółćńĄĘŚŹŻÓŁĆŃ]/g, '');
+  const fileName = `certyfikat_${safeName}.pdf`;
 
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');

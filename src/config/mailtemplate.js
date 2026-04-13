@@ -23,7 +23,7 @@ export const MAIL_SUBJECT = "Zapytanie o szkolenie: {trainingTitle}";
 //   {contactPerson} — VITE_CONTACT_PERSON
 //   {contactEmail}  — VITE_CONTACT_EMAIL
 //   {contactPhone}  — VITE_CONTACT_PHONE
-export const MAIL_BODY = `Dzień dobry {name},
+export const MAIL_BODY = `Szanowna/y {name},
 
 dziękujemy za zainteresowanie szkoleniem organizowanym przez ENGEL Polska.
 

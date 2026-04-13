@@ -4,51 +4,7 @@ import App from './App.jsx'
 
 const BUILD_TIME = __BUILD_TIME__;
 const STORED_KEY = 'eaa_build_v';
-const ROLE_KEY   = 'eea_role';
 
-// ─── ROLA-BASED PRELOAD ────────────────────────────────────────────────────
-// Startuje ZANIM React się zamontuje — równolegle z checkVersion() i session
-// restore w Supabase. Przeglądarka pobiera chunki w tle; gdy App.jsx skończy
-// sprawdzać token, pliki są już w cache i Suspense nie pokazuje spinnera.
-//
-// eea_role jest zapisywane przez session.saveRole() po handleLogin.
-// Przy pierwszym logowaniu rola jest nieznana — preload się nie uruchamia,
-// ale chunki i tak są pobierane przy montowaniu komponentów (lazy + Suspense).
-(function preloadRoleChunks() {
-  try {
-    const role = localStorage.getItem(ROLE_KEY);
-    if (!role) return;
-
-    if (role === 'admin') {
-      // Admin — preload tylko panel admina, reszta niepotrzebna
-      import('./components/admin/AdminPanel.jsx');
-    } else if (role === 'trainer') {
-      // Trener — preload jego terminarza i shared tabów
-      import('./components/TrainerScheduleTab.jsx');
-      import('./components/MessagesTab.jsx');
-      import('./components/ProfileTab.jsx');
-    } else {
-      // Klient — preload tab 0 i tab 1 (najczęściej odwiedzane)
-      import('./components/TrainingTab.jsx');
-      import('./components/CatalogTab.jsx');
-    }
-  } catch {}
-})();
-
-// ─── WERSJA / UPDATE ──────────────────────────────────────────────────────
-// ZMIANA vs oryginał: NIE kasujemy już wszystkich cache przy każdym deploy.
-//
-// Poprzednie zachowanie: każdy build → caches.delete(wszystko) → Workbox
-// musiał pobierać WSZYSTKIE pliki od nowa, niwelując benefit chunked caching.
-//
-// Nowe zachowanie: Workbox sam wykrywa zmienione chunki (content hash w nazwie
-// pliku) i pobiera TYLKO je. checkVersion() robi teraz tylko reload strony
-// gdy wykryje nową wersję — Workbox już zainstalował zaktualizowane chunki
-// przez autoUpdate/SKIP_WAITING w tle.
-//
-// Kiedy NADAL kasować cache ręcznie: breaking changes (zmiana schematu DB,
-// zmiana formatu localStorage). W takim przypadku zmień prefiks STORED_KEY
-// np. z 'eaa_build_v' na 'eaa_build_v2' — to wymusi pełny reload u wszystkich.
 async function checkVersion() {
   try {
     const res = await fetch('/version.json', { cache: 'no-store' });
@@ -59,16 +15,21 @@ async function checkVersion() {
 
     if (stored && stored !== v) {
       localStorage.setItem(STORED_KEY, v);
-      // Workbox pobiera zmienione chunki automatycznie przez autoUpdate.
-      // My robimy tylko reload — przeglądarka użyje świeżo zainstalowanych
-      // plików z cache service workera, bez ponownego pobierania wszystkiego.
-      window.location.reload();
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      window.location.reload(true);
       return;
     }
 
     localStorage.setItem(STORED_KEY, v);
-  } catch {
-    // Brak sieci lub błąd — uruchom z cache
+  } catch (e) {
+    // Brak sieci lub błąd — nic nie rób, uruchom z cache
   }
 }
 

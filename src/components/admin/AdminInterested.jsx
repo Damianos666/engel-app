@@ -138,24 +138,22 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
     }
   }
 
-  // Grupuj po scheduled_training_id, sortuj grupy wg daty rosnąco, te z katalogu na koniec
+  // Grupuj po scheduled_training_id, sortuj grupy wg daty rosnąco
   const groups = useMemo(() => {
     const map = new Map();
     interests.forEach(item => {
-      const sid = item.scheduled_training_id || `CATALOG-${item.training_id}`;
+      const sid = item.scheduled_training_id;
       if (!map.has(sid)) {
-        map.set(sid, { scheduled: item.scheduled, isCatalog: !item.scheduled_training_id, trainingId: item.training_id, items: [] });
+        map.set(sid, { scheduled: item.scheduled, items: [] });
       }
       map.get(sid).items.push(item);
     });
     return Array.from(map.values()).sort((a, b) => {
+      // Zgłoszenia z katalogu (bez terminu) — na końcu listy
+      if (!a.scheduled && b.scheduled) return 1;
+      if (a.scheduled && !b.scheduled) return -1;
       const da = a.scheduled?.date || "";
       const db2 = b.scheduled?.date || "";
-      if (a.isCatalog && !b.isCatalog) return 1;
-      if (!a.isCatalog && b.isCatalog) return -1;
-      if (a.isCatalog && b.isCatalog) {
-          return (a.trainingId || "").localeCompare(b.trainingId || "");
-      }
       return da.localeCompare(db2);
     });
   }, [interests]);
@@ -220,22 +218,168 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
         <div style={{padding:"10px 12px 24px", display:"flex", flexDirection:"column", gap:16}}>
           {groups.map(group => {
             const sched = group.scheduled;
-            const trainingId = group.isCatalog ? group.trainingId : sched?.training_id;
+
+            // ── zgłoszenia z KATALOGU (scheduled_training_id = null) ──────────
+            const isCatalogGroup = !sched;
+            if (isCatalogGroup) {
+              const groupContacted = group.items.filter(i => i.contacted).length;
+              const groupTotal     = group.items.length;
+              return (
+                <div key="catalog-interests" style={{
+                  background:C.white, borderRadius:8,
+                  boxShadow:"0 1px 3px rgba(0,0,0,.07)", overflow:"hidden",
+                }}>
+                  {/* nagłówek grupy katalogowej */}
+                  <div style={{
+                    borderLeft:"4px solid #2471A3",
+                    padding:"12px 14px",
+                    background:C.white,
+                    borderBottom:`1px solid ${C.grey}`,
+                  }}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#2471A3",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>
+                          Zainteresowanie ogólne (bez terminu)
+                        </div>
+                        <div style={{fontSize:14,fontWeight:700,color:C.black,lineHeight:1.3,marginBottom:6}}>
+                          Zgłoszenia z katalogu szkoleń
+                        </div>
+                        <div style={{fontSize:11,color:C.greyMid}}>
+                          {groupContacted === groupTotal
+                            ? <span style={{color:C.greenDk,fontWeight:700}}>✓ Wszyscy skontaktowani ({groupTotal})</span>
+                            : <>{groupTotal} {groupTotal===1?"osoba":"osoby"} · <span style={{color:C.greenDk,fontWeight:700}}>{groupContacted} skontaktowanych</span></>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* lista osób */}
+                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                    {group.items.map((item, idx) => {
+                      const isWithdrawn = item.is_withdrawn;
+                      const isContacted = item.contacted;
+                      const isUpdating  = updatingId === item.id;
+                      const contactedDate = item.contacted_at
+                        ? new Date(item.contacted_at).toLocaleDateString("pl-PL",{day:"numeric",month:"short",year:"numeric"})
+                        : null;
+                      // Znajdź nazwę szkolenia po training_id
+                      const itemTraining = item.training_id
+                        ? TRAININGS.find(x => x.id === item.training_id)
+                        : null;
+                      return (
+                        <div key={item.id} style={{
+                          display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+                          gap:12, padding:"10px 14px",
+                          borderBottom: idx < group.items.length-1 ? `1px solid ${C.grey}` : "none",
+                          background: isWithdrawn ? "#FEF9F0" : isContacted ? "#F0FFF4" : C.white,
+                          opacity: isWithdrawn ? 0.7 : 1,
+                        }}>
+                          <div style={{flex:1,minWidth:0}}>
+                            {isWithdrawn && (
+                              <div style={{fontSize:10,fontWeight:700,color:"#A04000",marginBottom:4,letterSpacing:1}}>
+                                ✗ WYCOFANO
+                              </div>
+                            )}
+                            {itemTraining && (
+                              <div style={{fontSize:12,fontWeight:700,color:"#2471A3",marginBottom:3}}>
+                                📚 {itemTraining.title}
+                              </div>
+                            )}
+                            <div style={{fontSize:13,fontWeight:700,color: isWithdrawn ? C.greyMid : C.black}}>
+                              {item.name || item.email || "—"}
+                            </div>
+                            {item.email && (
+                              <div style={{fontSize:11,color: isWithdrawn ? "#A04000" : C.greyMid, fontWeight: isWithdrawn ? 700 : 400}}>
+                                {item.email}
+                              </div>
+                            )}
+                            {(item.stanowisko || item.firma) && (
+                              <div style={{fontSize:11,color: isWithdrawn ? "#A04000" : C.greyMid}}>
+                                {[item.stanowisko,item.firma].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                            {item.phone && (
+                              <div style={{fontSize:11,color: isWithdrawn ? "#A04000" : C.greyMid}}>
+                                📞 {item.phone}
+                              </div>
+                            )}
+                            {isContacted && contactedDate && (
+                              <div style={{fontSize:10,color:C.greenDk,marginTop:3,fontWeight:600}}>
+                                ✓ Skontaktowano {contactedDate}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignItems:"flex-end"}}>
+                            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                              {item.email && (
+                                <a
+                                  href={`mailto:${item.email}?subject=Szkolenie – zainteresowanie&body=Dzień dobry ${item.name || ""},`}
+                                  title={`Wyślij mail do ${item.email}`}
+                                  style={{
+                                    display:"inline-flex",alignItems:"center",justifyContent:"center",
+                                    padding:"7px 10px",fontSize:14,
+                                    border:"1.5px solid #2980B9",borderRadius:6,
+                                    background:"none",color:"#2980B9",
+                                    textDecoration:"none",whiteSpace:"nowrap",lineHeight:1,
+                                  }}
+                                >✉</a>
+                              )}
+                              {!isWithdrawn && (
+                                <button
+                                  onClick={() => toggleContacted(item)}
+                                  disabled={isUpdating}
+                                  style={{
+                                    padding:"7px 12px",fontSize:11,fontWeight:700,
+                                    border:`1.5px solid ${isContacted ? C.green : C.grey}`,
+                                    borderRadius:6,
+                                    background: isContacted ? C.green : C.white,
+                                    color: isContacted ? C.white : C.greyMid,
+                                    cursor:isUpdating?"not-allowed":"pointer",
+                                    opacity:isUpdating?0.5:1,
+                                    transition:"all .15s",whiteSpace:"nowrap",
+                                  }}
+                                >
+                                  {isUpdating ? "…" : isContacted ? "Zapisano" : "Skontaktowano"}
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => deleteItem(item)}
+                              disabled={deletingId === item.id}
+                              style={{
+                                padding:"4px 8px",fontSize:10,fontWeight:700,
+                                border:`1px solid ${C.red}`,borderRadius:4,
+                                background:"none",color:C.red,
+                                cursor:deletingId===item.id?"not-allowed":"pointer",
+                                opacity:deletingId===item.id?0.5:1,whiteSpace:"nowrap",
+                              }}
+                            >
+                              {deletingId===item.id?"…":"🗑 Usuń"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            // ── zgłoszenia z TERMINARZA (standardowy widok) ──────────────────
+            const trainingId = sched?.training_id;
             const t = trainingId && trainingId !== "ST"
               ? TRAININGS.find(x => x.id === trainingId)
               : null;
             const grp   = t ? GROUPS.find(g => g.id === t.group) : null;
             const isST  = trainingId === "ST";
-            const barColor = group.isCatalog ? "#2980B9" : isST ? "#8E44AD" : (grp?.color || C.green);
+            const barColor = isST ? "#8E44AD" : (grp?.color || C.green);
             const trainingTitle = isST
               ? (sched?.custom_name || "Szkolenie specjalne")
               : (t?.title || trainingId || "—");
 
             const dateStr = sched?.date || "";
             const dateObj = dateStr ? new Date(dateStr + "T00:00:00") : null;
-            const dateLabel = group.isCatalog
-              ? "Katalog (Brak terminu)"
-              : dateObj
+            const dateLabel = dateObj
               ? dateObj.toLocaleDateString("pl-PL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
               : "—";
 
@@ -246,10 +390,9 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
 
             const groupContacted  = group.items.filter(i => i.contacted).length;
             const groupTotal      = group.items.length;
-            const groupKey = group.isCatalog ? `CATALOG-${group.trainingId}` : sched?.id || dateStr;
 
             return (
-              <div key={groupKey} style={{
+              <div key={sched?.id || dateStr} style={{
                 background:C.white,
                 borderRadius:8,
                 boxShadow:"0 1px 3px rgba(0,0,0,.07)",
@@ -257,20 +400,20 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
               }}>
                   {/* nagłówek szkolenia — klikalny, otwiera edycję notatek */}
                 <div
-                  onClick={() => !group.isCatalog && (editingNotes === sched?.id ? setEditingNotes(null) : openNotesEdit(sched))}
+                  onClick={() => editingNotes === sched?.id ? setEditingNotes(null) : openNotesEdit(sched)}
                   style={{
                     borderLeft:`4px solid ${barColor}`,
                     padding:"12px 14px",
-                    background: (editingNotes === sched?.id && !group.isCatalog) ? "#F8FFF0" : C.white,
+                    background: editingNotes === sched?.id ? "#F8FFF0" : C.white,
                     borderBottom:`1px solid ${C.grey}`,
-                    cursor: group.isCatalog ? "default" : "pointer",
+                    cursor:"pointer",
                     userSelect:"none",
                   }}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:11,fontWeight:700,color:barColor,marginBottom:3,textTransform:"capitalize"}}>
                         {dateLabel}
-                        {endDateStr && endDateStr !== dateStr && !group.isCatalog && (
+                        {endDateStr && endDateStr !== dateStr && (
                           <span style={{fontWeight:400,color:C.greyMid}}> – {endDateStr}</span>
                         )}
                       </div>
@@ -289,26 +432,24 @@ export function AdminInterested({ token, onContactedChange, refreshKey }) {
                             : <>{groupTotal} {groupTotal === 1 ? "osoba" : "osoby"} · <span style={{color:C.greenDk,fontWeight:700}}>{groupContacted} skontaktowanych</span></>
                           }
                         </span>
-                        {sched?.participants_count != null && !group.isCatalog && (
+                        {sched?.participants_count != null && (
                           <span style={{fontSize:11,color:C.greyMid}}>· 👥 {sched.participants_count}</span>
                         )}
-                        {sched?.notes && !group.isCatalog && (
+                        {sched?.notes && (
                           <span style={{fontSize:10,color:C.greyMid,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}}>
                             📝 {sched.notes}
                           </span>
                         )}
                       </div>
                     </div>
-                    {!group.isCatalog && (
-                      <span style={{fontSize:12,color:C.greyMid,marginLeft:8,flexShrink:0}}>
-                        {editingNotes === sched?.id ? "▲" : "✏️"}
-                      </span>
-                    )}
+                    <span style={{fontSize:12,color:C.greyMid,marginLeft:8,flexShrink:0}}>
+                      {editingNotes === sched?.id ? "▲" : "✏️"}
+                    </span>
                   </div>
                 </div>
 
                 {/* inline edytor notatek i liczby uczestników */}
-                {editingNotes === sched?.id && !group.isCatalog && (
+                {editingNotes === sched?.id && (
                   <div onClick={e => e.stopPropagation()} style={{
                     padding:"14px",
                     background:"#F8FFF0",
