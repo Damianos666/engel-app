@@ -86,29 +86,10 @@ export function CertModal({ entry, user, onClose }) {
   const { addToast } = useToast();
   const { token } = useUser();
   const [generating, setGenerating] = useState(false);
-  const [certId, setCertId] = useState("…");
+  // cert_id pochodzi zawsze z entry (zapisany w DB przez handleComplete)
+  // nigdy nie jest regenerowany po stronie klienta
+  const certId = entry.cert_id || null;
   const sub = [user.displayRole, user.firma].filter(Boolean).join(" · ");
-
-  // Generowanie numeru certyfikatu — async (HMAC-SHA256)
-  // Format: CCYDDDTSSSSS (12 znaków)
-  // CC=nr szkolenia, Y=rok(litera), DDD=dzień roku, T=trener, SSSSS=podpis HMAC
-  useEffect(() => {
-    let cancelled = false;
-    const trainerNum = parseInt(entry.key?.slice(-1)) || 1;
-    import("../lib/certId").then(({ generateCertId }) =>
-      generateCertId({
-        trainingId: entry.training.id,
-        date:       entry.date,
-        trainer:    trainerNum,
-        uid:        user.id || "",
-      })
-    ).then(id => {
-      if (!cancelled) setCertId(id);
-    }).catch(() => {
-      if (!cancelled) setCertId("ERR");
-    });
-    return () => { cancelled = true; };
-  }, [entry.training.id, entry.date, entry.key, user.id]);
 
   async function downloadPDF() {
     setGenerating(true);
@@ -116,6 +97,7 @@ export function CertModal({ entry, user, onClose }) {
       await loadAndGenerate({
         participantName: user.displayName,
         trainingTitle:   entry.training.title,
+        certId:          certId,
         parsedCode: {
           trainerNum: parseInt(entry.key?.slice(-1)) || 1,
           date:       entry.date,
@@ -132,8 +114,7 @@ export function CertModal({ entry, user, onClose }) {
     }
   }
 
-  // certId jest gotowy gdy nie jest już wartością początkową "…"
-  const certReady = certId !== "…" && certId !== "ERR";
+  const certReady = !!certId;
 
   return (
     <Portal>
@@ -158,7 +139,7 @@ export function CertModal({ entry, user, onClose }) {
             <div style={{height:1,background:C.grey,margin:"16px 0"}}/>
             <div style={{display:"flex",gap:32}}>
               <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>DATA</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{entry.date}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>NR CERTYFIKATU</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{certId}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:C.greyMid,marginBottom:4}}>NR CERTYFIKATU</div><div style={{fontFamily:"monospace",fontSize:14,fontWeight:600}}>{certId ?? <span style={{color:"#bbb",fontSize:12}}>generowanie…</span>}</div></div>
             </div>
             {entry.trainer && (
               <>
